@@ -22,3 +22,4 @@ Thumbs.db
 
 # Tauri
 src-tauri/gen/
+.github/workflows/

@@ -3,7 +3,7 @@ pub mod macos;
 
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WindowInfo {
     pub id: u32,
     pub title: String,

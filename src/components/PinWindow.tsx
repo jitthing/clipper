@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 export function PinWindow() {
   const [imageData, setImageData] = useState<string | null>(null);
   const [label, setLabel] = useState<string>("");
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     const loadData = () => {
@@ -18,7 +19,9 @@ export function PinWindow() {
       }
     };
 
+    // Try immediately (data may already be set)
     loadData();
+    // Also listen for the event
     window.addEventListener("pin-data-ready", loadData);
     return () => window.removeEventListener("pin-data-ready", loadData);
   }, []);
@@ -32,7 +35,7 @@ export function PinWindow() {
   };
 
   if (!imageData) {
-    return null;
+    return null; // Not a pin window, or data not yet received
   }
 
   return (
@@ -40,12 +43,15 @@ export function PinWindow() {
       className="relative group w-full h-full cursor-grab select-none"
       data-tauri-drag-region
       style={{ WebkitUserSelect: "none" }}
+      onMouseDown={() => setIsDragging(true)}
+      onMouseUp={() => setIsDragging(false)}
     >
       <img
         src={`data:image/png;base64,${imageData}`}
         alt="Pinned screenshot"
         className="w-full h-full object-contain"
         draggable={false}
+        style={{ pointerEvents: isDragging ? "none" : "auto" }}
       />
       <button
         onClick={handleClose}
