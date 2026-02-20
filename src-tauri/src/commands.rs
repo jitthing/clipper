@@ -89,15 +89,20 @@ pub async fn pin_screenshot(app: AppHandle, image_data: String, width: f64, heig
         .build()
         .map_err(|e| format!("Failed to create pin window: {}", e))?;
 
-    // Send the image data to the pin window after it's ready
+    // Send the image data to the pin window after it's ready (retry up to 5 times)
     let image_data_clone = image_data.clone();
     let label_clone = label.clone();
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        let _ = window.eval(&format!(
+        let js = format!(
             "window.__PIN_DATA__ = {{ imageData: '{}', label: '{}' }}; window.dispatchEvent(new Event('pin-data-ready'));",
             image_data_clone, label_clone
-        ));
+        );
+        for _ in 0..5 {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            if window.eval(&js).is_ok() {
+                break;
+            }
+        }
     });
 
     Ok(label)

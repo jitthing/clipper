@@ -6,12 +6,15 @@ mod image_processing;
 mod window;
 
 use tauri::Emitter;
+use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Register Cmd+Shift+X global hotkey
             let shortcut = Shortcut::new(
                 Some(Modifiers::META | Modifiers::SHIFT),
                 Code::KeyX,

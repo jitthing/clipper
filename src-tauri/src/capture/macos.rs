@@ -37,6 +37,7 @@ extern "C" {
     fn CFRelease(cf: *const c_void);
 }
 
+/// Capture the full screen and return PNG bytes.
 pub fn capture_screen() -> Result<Vec<u8>, String> {
     unsafe {
         let display = CGMainDisplayID();
@@ -46,6 +47,7 @@ pub fn capture_screen() -> Result<Vec<u8>, String> {
     }
 }
 
+/// Capture a specific region and return PNG bytes.
 pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Vec<u8>, String> {
     unsafe {
         capture_cg_rect(CGRect {
@@ -63,6 +65,7 @@ unsafe fn capture_cg_rect(rect: CGRect) -> Result<Vec<u8>, String> {
     if image.is_null() {
         return Err("CGWindowListCreateImage returned null".into());
     }
+
     let result = cg_image_to_png(image);
     CGImageRelease(image);
     result
@@ -101,11 +104,13 @@ unsafe fn cg_image_to_png(image: CGImageRef) -> Result<Vec<u8>, String> {
             }
         }
     }
+
     CFRelease(data);
 
-    // Encode to PNG
+    // Encode to PNG using the `image` crate
     let img = image::RgbaImage::from_raw(width as u32, height as u32, rgba)
         .ok_or("Failed to create image buffer")?;
+
     let mut png_bytes = Vec::new();
     let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
     image::ImageEncoder::write_image(
