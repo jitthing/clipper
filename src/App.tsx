@@ -1,9 +1,146 @@
-import { useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { CaptureOverlay } from "./components/CaptureOverlay";
 import { Toolbar } from "./components/Toolbar";
+import { AnnotationCanvas } from "./components/AnnotationCanvas";
+import { SaveDialog } from "./components/SaveDialog";
+import { useCaptureStore } from "./stores/captureStore";
+import { exportCanvas } from "./utils/canvas";
 
 function App() {
-  const [mode, setMode] = useState<"idle" | "capturing" | "annotating">("idle");
+  const mode = useCaptureStore((s) => s.mode);
+  const setMode = useCaptureStore((s) => s.setMode);
+  const setCapturedImage = useCaptureStore((s) => s.setCapturedImage);
+  const annotations = useCaptureStore((s) => s.annotations);
+  const undo = useCaptureStore((s) => s.undo);
+  const redo = useCaptureStore((s) => s.redo);
+  const showSaveDialog = useCaptureStore((s) => s.showSaveDialog);
+  const setShowSaveDialog = useCaptureStore((s) => s.setShowSaveDialog);
+  const clearAnnotations = useCaptureStore((s) => s.clearAnnotations);
+
+  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Listen for global hotkey trigger from Rust backend
+  useEffect(() => {
+    const unlisten = listen("capture-trigger", () => {
+      setMode("capturing");
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [setMode]);
+
+  const handleCapture = useCallback(
+    (imageData: string) => {
+      setCapturedImage(imageData);
+      clearAnnotations();
+
+      const img = new Image();
+      img.onload = () => {
+        setBgImage(img);
+        setCanvasSize({ width: img.naturalWidth, height: img.naturalHeight });
+
+        // Create a background canvas for compositing
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        bgCanvasRef.current = canvas;
+
+        setMode("annotating");
+      };
+      img.src = imageData;
+    },
+    [setCapturedImage, setMode, clearAnnotations]
+  );
+
+  const handleDemoCapture = useCallback(() => {
+    // Demo mode: generate a gradient image for testing without Tauri backend
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 600;
+    const ctx = canvas.getContext("2d")!;
+    const grad = ctx.createLinearGradient(0, 0, 800, 600);
+    grad.addColorStop(0, "#667eea");
+    grad.addColorStop(1, "#764ba2");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 800, 600);
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.fillRect(50, 50, 300, 200);
+    ctx.fillRect(400, 100, 350, 180);
+    ctx.fillRect(100, 300, 600, 250);
+    ctx.fillStyle = "#fff";
+    ctx.font = "24px sans-serif";
+    ctx.fillText("Demo Screenshot — Draw annotations!", 150, 420);
+    handleCapture(canvas.toDataURL());
+  }, [handleCapture]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (mode !== "annotating") return;
+      if (e.key === "z" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        redo();
+      } else if (e.key === "z" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        undo();
+      } else if (e.key === "Escape") {
+        setMode("idle");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mode, undo, redo, setMode]);
+
+  const handleCopy = useCallback(async () => {
+    if (!bgCanvasRef.current) return;
+    const dataUrl = exportCanvas(bgCanvasRef.current, annotations, "png");
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob }),
+      ]);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  }, [annotations]);
+
+  const handleSave = useCallback(
+    async (format: "png" | "jpg", quality: number) => {
+      if (!bgCanvasRef.current) return;
+      const dataUrl = exportCanvas(bgCanvasRef.current, annotations, format, quality);
+      const now = new Date();
+      const ts = now.toISOString().replace(/T/, "_").replace(/:/g, "-").slice(0, 19);
+      const ext = format === "jpg" ? "jpg" : "png";
+      const defaultName = `Snaplark_${ts}.${ext}`;
+
+      try {
+        const { save } = await import("@tauri-apps/plugin-dialog");
+        const filePath = await save({
+          defaultPath: defaultName,
+          filters: [{ name: format.toUpperCase(), extensions: [ext] }],
+        });
+        if (filePath) {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const base64 = dataUrl.split(",")[1];
+          await invoke("save_to_file", { imageData: base64, path: filePath, format: ext });
+        }
+      } catch {
+        // Fallback: browser download
+        const link = document.createElement("a");
+        link.download = defaultName;
+        link.href = dataUrl;
+        link.click();
+      }
+      setShowSaveDialog(false);
+    },
+    [annotations, setShowSaveDialog]
+  );
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -14,26 +151,41 @@ function App() {
             <p className="text-gray-500 mb-6">
               Press <kbd className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">⌘⇧X</kbd> to capture
             </p>
-            <button
-              onClick={() => setMode("capturing")}
-              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
-            >
-              Start Capture
-            </button>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setMode("capturing")}
+                className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+              >
+                Start Capture
+              </button>
+              <button
+                onClick={handleDemoCapture}
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                Demo Mode
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {mode === "capturing" && (
-        <CaptureOverlay onCapture={() => setMode("annotating")} onCancel={() => setMode("idle")} />
+        <CaptureOverlay onCapture={handleCapture} onCancel={() => setMode("idle")} />
       )}
 
       {mode === "annotating" && (
         <div className="flex flex-col h-screen">
-          <Toolbar />
-          <div className="flex-1 flex items-center justify-center bg-gray-100">
-            <p className="text-gray-400">Annotation canvas — coming soon</p>
+          <Toolbar onCopy={handleCopy} onSave={() => setShowSaveDialog(true)} />
+          <div className="flex-1 flex items-center justify-center bg-gray-800/50 overflow-auto p-6">
+            <AnnotationCanvas
+              backgroundImage={bgImage}
+              width={canvasSize.width}
+              height={canvasSize.height}
+            />
           </div>
+          {showSaveDialog && (
+            <SaveDialog onSave={handleSave} onCancel={() => setShowSaveDialog(false)} />
+          )}
         </div>
       )}
     </div>

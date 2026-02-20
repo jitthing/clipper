@@ -1,4 +1,6 @@
+use base64::Engine;
 use serde::Deserialize;
+
 use crate::capture;
 use crate::window;
 
@@ -12,15 +14,14 @@ pub struct Region {
 
 #[tauri::command]
 pub fn capture_screen() -> Result<String, String> {
-    let _data = capture::capture_full_screen()?;
-    // TODO: encode to base64 and return
-    Ok("capture_placeholder".to_string())
+    let data = capture::capture_full_screen()?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&data))
 }
 
 #[tauri::command]
 pub fn capture_region(region: Region) -> Result<String, String> {
-    let _data = capture::capture_region(region.x, region.y, region.width, region.height)?;
-    Ok("region_capture_placeholder".to_string())
+    let data = capture::capture_region(region.x, region.y, region.width, region.height)?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&data))
 }
 
 #[tauri::command]
@@ -30,9 +31,12 @@ pub fn copy_to_clipboard(_image_data: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn save_to_file(_image_data: String, _path: String, _format: String) -> Result<(), String> {
-    // TODO: Decode base64 image and save to file
-    Err("Save to file not yet implemented".to_string())
+pub fn save_to_file(image_data: String, path: String, _format: String) -> Result<(), String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&image_data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+    std::fs::write(&path, &bytes).map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(())
 }
 
 #[tauri::command]
