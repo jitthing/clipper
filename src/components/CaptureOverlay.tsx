@@ -68,8 +68,16 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (isDragging && dragStart) {
-        setDragCurrent({ x: e.screenX, y: e.screenY });
+      if (dragStart) {
+        const dx = Math.abs(e.screenX - dragStart.x);
+        const dy = Math.abs(e.screenY - dragStart.y);
+        if (!isDragging && (dx > 3 || dy > 3)) {
+          setIsDragging(true);
+          setHoveredWindow(null);
+        }
+        if (isDragging) {
+          setDragCurrent({ x: e.screenX, y: e.screenY });
+        }
       } else {
         setHoveredWindow(findWindowAt(e.screenX, e.screenY));
       }
@@ -78,10 +86,8 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
   );
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setIsDragging(true);
     setDragStart({ x: e.screenX, y: e.screenY });
     setDragCurrent({ x: e.screenX, y: e.screenY });
-    setHoveredWindow(null);
   }, []);
 
   const handleMouseUp = useCallback(async () => {
@@ -107,12 +113,17 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     setDragCurrent(null);
   }, [isDragging, dragStart, dragCurrent, hoveredWindow]);
 
+  const [hidden, setHidden] = useState(false);
+
   const captureRegion = async (region: Region) => {
     try {
+      setHidden(true);
+      await new Promise((r) => setTimeout(r, 100));
       const base64 = await invoke<string>("capture_region", { region });
       onCapture(`data:image/png;base64,${base64}`);
     } catch (err) {
       console.error("Capture failed:", err);
+      setHidden(false);
       onCancel();
     }
   };
@@ -132,7 +143,7 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     <div
       ref={overlayRef}
       className="fixed inset-0 z-[9999] cursor-crosshair select-none"
-      style={{ background: "rgba(0,0,0,0.3)" }}
+      style={{ background: "rgba(0,0,0,0.3)", visibility: hidden ? "hidden" : "visible" }}
       onMouseMove={handleMouseMove}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
