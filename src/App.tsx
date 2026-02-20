@@ -1,9 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CaptureOverlay } from "./components/CaptureOverlay";
 import { Toolbar } from "./components/Toolbar";
+import { PinWindow } from "./components/PinWindow";
 
 function App() {
   const [mode, setMode] = useState<"idle" | "capturing" | "annotating">("idle");
+  const [isPinWindow, setIsPinWindow] = useState(false);
+
+  // Detect if this window instance is a pin window
+  useEffect(() => {
+    const checkPin = () => {
+      if ((window as any).__PIN_DATA__) {
+        setIsPinWindow(true);
+      }
+    };
+    checkPin();
+    window.addEventListener("pin-data-ready", checkPin);
+    return () => window.removeEventListener("pin-data-ready", checkPin);
+  }, []);
+
+  if (isPinWindow) {
+    return <PinWindow />;
+  }
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -30,7 +48,19 @@ function App() {
 
       {mode === "annotating" && (
         <div className="flex flex-col h-screen">
-          <Toolbar />
+          <Toolbar
+            onCopy={async () => {
+              // TODO: Get actual canvas data as base64 PNG
+              return null;
+            }}
+            onPin={async () => {
+              // TODO: Get actual canvas data
+              return null;
+            }}
+            onSave={() => {
+              // TODO: Implement save dialog
+            }}
+          />
           <div className="flex-1 flex items-center justify-center bg-gray-100">
             <p className="text-gray-400">Annotation canvas — coming soon</p>
           </div>
