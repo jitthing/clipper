@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { CaptureOverlay } from "./components/CaptureOverlay";
 import { Toolbar } from "./components/Toolbar";
 import { PinWindow } from "./components/PinWindow";
+import { useCaptureStore } from "./stores/captureStore";
 
 function App() {
   const [mode, setMode] = useState<"idle" | "capturing" | "annotating">("idle");
   const [isPinWindow, setIsPinWindow] = useState(false);
+  const setCapturedImage = useCaptureStore((s) => s.setCapturedImage);
+  const capturedImageUrl = useCaptureStore((s) => s.capturedImageUrl);
 
   // Detect if this window instance is a pin window
   useEffect(() => {
@@ -19,6 +23,16 @@ function App() {
     return () => window.removeEventListener("pin-data-ready", checkPin);
   }, []);
 
+  // Listen for global hotkey capture trigger
+  useEffect(() => {
+    const unlisten = listen("capture-trigger", () => {
+      setMode("capturing");
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
   if (isPinWindow) {
     return <PinWindow />;
   }
@@ -30,7 +44,9 @@ function App() {
           <div className="text-center p-8 rounded-2xl bg-white/90 shadow-xl backdrop-blur-sm">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">📸 Snaplark</h1>
             <p className="text-gray-500 mb-6">
-              Press <kbd className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">⌘⇧X</kbd> to capture
+              Press{" "}
+              <kbd className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">⌘⇧X</kbd> to
+              capture
             </p>
             <button
               onClick={() => setMode("capturing")}
@@ -43,26 +59,60 @@ function App() {
       )}
 
       {mode === "capturing" && (
-        <CaptureOverlay onCapture={() => setMode("annotating")} onCancel={() => setMode("idle")} />
+        <CaptureOverlay
+          onCapture={(imageDataUrl) => {
+            setCapturedImage(imageDataUrl);
+            setMode("annotating");
+          }}
+          onCancel={() => setMode("idle")}
+        />
       )}
 
       {mode === "annotating" && (
         <div className="flex flex-col h-screen">
           <Toolbar
             onCopy={async () => {
-              // TODO: Get actual canvas data as base64 PNG
-              return null;
+              if (!capturedImageUrl) return null;
+              // Strip the data URL prefix to get raw base64
+              return capturedImageUrl.replace(/^data:image\/png;base64,/, "");
             }}
             onPin={async () => {
-              // TODO: Get actual canvas data
-              return null;
+              if (!capturedImageUrl) return null;
+              // Create an image to get dimensions
+              const img = new Image();
+              img.src = capturedImageUrl;
+              await new Promise((r) => (img.onload = r));
+              return {
+                imageData: capturedImageUrl.replace(/^data:image\/png;base64,/, ""),
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+              };
             }}
             onSave={() => {
               // TODO: Implement save dialog
             }}
           />
           <div className="flex-1 flex items-center justify-center bg-gray-100">
-            <p className="text-gray-400">Annotation canvas — coming soon</p>
+            {capturedImageUrl ? (
+              <img
+                src={capturedImageUrl}
+                alt="Captured"
+                className="max-w-full max-h-[80vh] rounded shadow-lg"
+              />
+            ) : (
+              <p className="text-gray-400">Annotation canvas — coming soon</p>
+            )}
+          </div>
+          <div className="flex justify-center gap-2 p-4">
+            <button
+              onClick={() => {
+                setCapturedImage(null);
+                setMode("idle");
+              }}
+              className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+            >
+              New Capture
+            </button>
           </div>
         </div>
       )}
