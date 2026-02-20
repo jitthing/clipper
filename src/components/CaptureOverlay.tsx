@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface WindowInfo {
   id: number;
@@ -65,8 +66,16 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (isDragging && dragStart) {
-        setDragCurrent({ x: e.clientX, y: e.clientY });
+      if (dragStart) {
+        const dx = Math.abs(e.clientX - dragStart.x);
+        const dy = Math.abs(e.clientY - dragStart.y);
+        if (!isDragging && (dx > 3 || dy > 3)) {
+          setIsDragging(true);
+          setHoveredWindow(null);
+        }
+        if (isDragging) {
+          setDragCurrent({ x: e.clientX, y: e.clientY });
+        }
       } else {
         setHoveredWindow(findWindowAt(e.screenX, e.screenY));
       }
@@ -75,10 +84,8 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
   );
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
     setDragCurrent({ x: e.clientX, y: e.clientY });
-    setHoveredWindow(null);
   }, []);
 
   const getSelectionRegion = useCallback((): Region | null => {
@@ -90,6 +97,16 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
       height: Math.round(Math.abs(dragCurrent.y - dragStart.y)),
     };
   }, [dragStart, dragCurrent]);
+
+  const clientToScreen = useCallback(async (cx: number, cy: number) => {
+    const win = getCurrentWindow();
+    const pos = await win.outerPosition();
+    const scaleFactor = await win.scaleFactor();
+    return {
+      x: Math.round(pos.x / scaleFactor + cx),
+      y: Math.round(pos.y / scaleFactor + cy),
+    };
+  }, []);
 
   const captureRegion = useCallback(
     async (region: Region) => {
@@ -108,11 +125,10 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     if (isDragging && dragStart && dragCurrent) {
       const region = getSelectionRegion();
       if (region && region.width > 5 && region.height > 5) {
-        // Convert client coords to screen coords for capture
-        // For now use screen-relative (works on primary display)
+        const topLeft = await clientToScreen(region.x, region.y);
         const screenRegion = {
-          x: Math.round(Math.min(dragStart.x, dragCurrent.x)),
-          y: Math.round(Math.min(dragStart.y, dragCurrent.y)),
+          x: topLeft.x,
+          y: topLeft.y,
           width: region.width,
           height: region.height,
         };
@@ -132,7 +148,7 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     setIsDragging(false);
     setDragStart(null);
     setDragCurrent(null);
-  }, [isDragging, dragStart, dragCurrent, hoveredWindow, getSelectionRegion, captureRegion]);
+  }, [isDragging, dragStart, dragCurrent, hoveredWindow, getSelectionRegion, captureRegion, clientToScreen]);
 
   const selection = getSelectionRegion();
 
