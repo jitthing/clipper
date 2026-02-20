@@ -1,9 +1,10 @@
-use base64::Engine;
-use serde::Deserialize;
-use tauri::{AppHandle, Manager, WebviewWindowBuilder, WebviewUrl};
 use crate::capture;
 use crate::clipboard;
+use crate::permissions;
 use crate::window;
+use base64::Engine;
+use serde::Deserialize;
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -63,7 +64,12 @@ pub fn list_windows() -> Result<Vec<window::WindowInfo>, String> {
 }
 
 #[tauri::command]
-pub async fn pin_screenshot(app: AppHandle, image_data: String, width: f64, height: f64) -> Result<String, String> {
+pub async fn pin_screenshot(
+    app: AppHandle,
+    image_data: String,
+    width: f64,
+    height: f64,
+) -> Result<String, String> {
     let pin_id = PIN_COUNTER.fetch_add(1, Ordering::SeqCst);
     let label = format!("pin-{}", pin_id);
 
@@ -111,8 +117,45 @@ pub async fn pin_screenshot(app: AppHandle, image_data: String, width: f64, heig
 #[tauri::command]
 pub async fn close_pin_window(app: AppHandle, label: String) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(&label) {
-        window.close().map_err(|e| format!("Failed to close: {}", e))
+        window
+            .close()
+            .map_err(|e| format!("Failed to close: {}", e))
     } else {
         Err("Window not found".to_string())
     }
+}
+
+#[tauri::command]
+pub fn get_permission_status() -> permissions::PermissionStatus {
+    permissions::get_permission_status()
+}
+
+#[tauri::command]
+pub fn request_screen_recording_permission() -> Result<bool, String> {
+    permissions::request_screen_recording_permission()
+}
+
+#[tauri::command]
+pub fn request_accessibility_permission() -> Result<bool, String> {
+    permissions::request_accessibility_permission()
+}
+
+#[tauri::command]
+pub fn open_screen_recording_settings() -> Result<(), String> {
+    permissions::open_screen_recording_settings()
+}
+
+#[tauri::command]
+pub fn open_accessibility_settings() -> Result<(), String> {
+    permissions::open_accessibility_settings()
+}
+
+#[tauri::command]
+pub fn hide_main_window(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window not found".to_string())?;
+    window
+        .hide()
+        .map_err(|e| format!("Failed to hide window: {e}"))
 }

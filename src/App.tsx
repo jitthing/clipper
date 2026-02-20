@@ -1,12 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { CaptureOverlay } from "./components/CaptureOverlay";
 import { Toolbar } from "./components/Toolbar";
 import { PinWindow } from "./components/PinWindow";
 import { AnnotationCanvas } from "./components/AnnotationCanvas";
 import { SaveDialog } from "./components/SaveDialog";
+import { PermissionPanel } from "./components/PermissionPanel";
 import { useCaptureStore } from "./stores/captureStore";
 import { exportCanvas } from "./utils/canvas";
+
+interface PermissionStatus {
+  screen_recording_granted: boolean;
+  accessibility_granted: boolean;
+}
 
 function App() {
   const mode = useCaptureStore((s) => s.mode);
@@ -22,7 +29,38 @@ function App() {
   const [isPinWindow, setIsPinWindow] = useState(false);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus | null>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hasScreenPermission = permissionStatus?.screen_recording_granted ?? false;
+
+  const refreshPermissions = useCallback(async () => {
+    try {
+      const status = await invoke<PermissionStatus>("get_permission_status");
+      setPermissionStatus(status);
+      return status;
+    } catch (err) {
+      console.error("Failed to read permission status:", err);
+      return null;
+    }
+  }, []);
+
+  const hideMainWindow = useCallback(async () => {
+    try {
+      await invoke("hide_main_window");
+    } catch (err) {
+      console.error("Failed to hide main window:", err);
+    }
+  }, []);
+
+  const startCaptureIfAllowed = useCallback(async () => {
+    const status = await refreshPermissions();
+    if (!status?.screen_recording_granted) {
+      setMode("idle");
+      return false;
+    }
+    setMode("capturing");
+    return true;
+  }, [refreshPermissions, setMode]);
 
   // Detect if this window instance is a pin window
   useEffect(() => {
@@ -36,15 +74,29 @@ function App() {
     return () => window.removeEventListener("pin-data-ready", checkPin);
   }, []);
 
+  // Load permission status on startup
+  useEffect(() => {
+    refreshPermissions();
+  }, [refreshPermissions]);
+
   // Listen for global hotkey trigger from Rust backend
   useEffect(() => {
-    const unlisten = listen("capture-trigger", () => {
-      setMode("capturing");
+    const unlistenCapture = listen("capture-toggle", async () => {
+      if (mode === "capturing") {
+        setMode("idle");
+        await hideMainWindow();
+        return;
+      }
+      await startCaptureIfAllowed();
+    });
+    const unlistenOpen = listen("open-main-view", () => {
+      setMode("idle");
     });
     return () => {
-      unlisten.then((f) => f());
+      unlistenCapture.then((f) => f());
+      unlistenOpen.then((f) => f());
     };
-  }, [setMode]);
+  }, [mode, setMode, hideMainWindow, startCaptureIfAllowed]);
 
   const handleCapture = useCallback(
     (imageData: string) => {
@@ -104,11 +156,12 @@ function App() {
         undo();
       } else if (e.key === "Escape") {
         setMode("idle");
+        hideMainWindow();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mode, undo, redo, setMode]);
+  }, [mode, undo, redo, setMode, hideMainWindow]);
 
   const handleCopy = useCallback(async () => {
     if (!bgCanvasRef.current) return;
@@ -182,33 +235,60 @@ function App() {
     <div className="min-h-screen bg-transparent">
       {mode === "idle" && (
         <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center p-8 rounded-2xl bg-white/90 shadow-xl backdrop-blur-sm">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">📸 Snaplark</h1>
-            <p className="text-gray-500 mb-6">
-              Press{" "}
-              <kbd className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">⌘⇧X</kbd> to
-              capture
+          <div className="text-center p-8 rounded-2xl bg-white/95 shadow-xl backdrop-blur-sm max-w-xl">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Snaplark</h1>
+            <p className="text-gray-600 mb-6">
+              Press <kbd className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">⌘⇧X</kbd> to
+              open the capture overlay from background mode.
             </p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => setMode("capturing")}
-                className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
-              >
-                Start Capture
-              </button>
-              <button
-                onClick={handleDemoCapture}
-                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
-              >
-                Demo Mode
-              </button>
-            </div>
+            {!hasScreenPermission && permissionStatus ? (
+              <PermissionPanel
+                screenRecordingGranted={permissionStatus.screen_recording_granted}
+                accessibilityGranted={permissionStatus.accessibility_granted}
+                onRequestScreenRecording={() => {
+                  invoke("request_screen_recording_permission").then(() => refreshPermissions());
+                }}
+                onOpenScreenRecordingSettings={() => {
+                  invoke("open_screen_recording_settings");
+                }}
+                onRequestAccessibility={() => {
+                  invoke("request_accessibility_permission").then(() => refreshPermissions());
+                }}
+                onOpenAccessibilitySettings={() => {
+                  invoke("open_accessibility_settings");
+                }}
+                onRefresh={refreshPermissions}
+              />
+            ) : (
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    startCaptureIfAllowed();
+                  }}
+                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+                >
+                  Start Capture
+                </button>
+                <button
+                  onClick={handleDemoCapture}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                >
+                  Demo Mode
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {mode === "capturing" && (
-        <CaptureOverlay onCapture={handleCapture} onCancel={() => setMode("idle")} />
+        <CaptureOverlay
+          onCapture={handleCapture}
+          onCancel={() => {
+            setMode("idle");
+            hideMainWindow();
+          }}
+        />
       )}
 
       {mode === "annotating" && (
