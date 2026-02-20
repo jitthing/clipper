@@ -1,33 +1,44 @@
 # 📸 Snaplark
 
-A lightweight, open-source screenshot and screen capture tool inspired by Lark's capture experience. **Capture → Annotate → Pin → Share.**
+A lightweight, open-source screenshot and screen capture tool that replicates Lark's capture experience: **Capture → Annotate → Pin → Share.**
 
-Built with [Tauri 2.0](https://v2.tauri.app/) (Rust + React + TypeScript).
+Built with [Tauri 2.0](https://v2.tauri.app/) — Rust backend, React + TypeScript frontend. Tiny bundle (~5 MB), native performance, macOS first.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Status](https://img.shields.io/badge/status-in%20development-orange)
-
-<!-- TODO: Add screenshot/demo GIF here -->
+![CI](https://github.com/jitthing/snaplark/actions/workflows/ci.yml/badge.svg)
 
 ## Features
 
-### MVP (v0.1) — In Progress
-- [ ] Global hotkey (`⌘⇧X`) → region/window selection overlay
-- [ ] Smart window detection (auto-detect windows under cursor)
-- [ ] Annotation toolbar: arrow, rectangle, circle, line, text, blur/mosaic, numbering
-- [ ] Color picker for annotations
-- [ ] Copy to clipboard / save to file (PNG/JPG)
-- [ ] Pin screenshot to screen (floating always-on-top window)
+### MVP (v0.1)
 
-### Planned
-- [ ] Scrolling capture (auto-scroll and stitch)
-- [ ] Screen recording with webcam overlay
-- [ ] OCR text recognition (macOS Vision framework)
-- [ ] Quick share (drag to app, upload to cloud)
-- [ ] Cross-platform support (Windows, Linux)
-- [ ] Plugin system for custom tools
-- [ ] Keyboard shortcuts customization
+| Feature | Status |
+|---|---|
+| Global hotkey (`⌘⇧X`) → region selection overlay | 🚧 In Progress |
+| Smart window detection (Accessibility API) | 🚧 In Progress |
+| Annotation toolbar (arrow, rect, circle, line, text, blur, numbering) | 🚧 In Progress |
+| Color picker | 🚧 In Progress |
+| Copy to clipboard (⌘C) | ✅ Done |
+| Save to file (PNG/JPG) | 🚧 In Progress |
+| Pin screenshot to screen (always-on-top, draggable, resizable) | ✅ Done |
+
+### Planned (v0.2+)
+
+| Feature | Status |
+|---|---|
+| Scrolling capture | 📋 Planned |
+| Screen recording + webcam overlay | 📋 Planned |
+| OCR text recognition (macOS Vision) | 📋 Planned |
+| Quick share (drag to app, cloud upload) | 📋 Planned |
+| Cross-platform (Windows, Linux) | 📋 Planned |
+| Plugin system | 📋 Planned |
+| Keyboard shortcuts customization | 📋 Planned |
+
+## Screenshots
+
+<!-- TODO: Add screenshot/demo GIF here -->
+> Screenshots coming soon.
 
 ## Tech Stack
 
@@ -35,7 +46,7 @@ Built with [Tauri 2.0](https://v2.tauri.app/) (Rust + React + TypeScript).
 |---|---|
 | Framework | Tauri 2.0 |
 | Backend | Rust |
-| Frontend | React + TypeScript + Vite |
+| Frontend | React 18 + TypeScript + Vite |
 | Styling | TailwindCSS |
 | Screen Capture | macOS ScreenCaptureKit |
 | Annotations | HTML Canvas API |
@@ -45,52 +56,64 @@ Built with [Tauri 2.0](https://v2.tauri.app/) (Rust + React + TypeScript).
 
 ### Prerequisites
 
+- **macOS 12.3+** (required for ScreenCaptureKit)
 - [Rust](https://rustup.rs/) (latest stable)
-- [Node.js](https://nodejs.org/) (v18+)
-- macOS 12.3+ (for ScreenCaptureKit)
+- [Node.js](https://nodejs.org/) v18+
+- Xcode Command Line Tools (`xcode-select --install`)
 
-### Development
+### Development Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/jitthing/snaplark.git
 cd snaplark
 
-# Install dependencies
+# Install frontend dependencies
 npm install
 
-# Run in development mode
+# Run in development mode (starts both Vite dev server and Tauri)
 npm run tauri dev
 ```
 
-### Build
+### Build from Source
 
 ```bash
-# Build for production
+# Production build
 npm run tauri build
+
+# Output locations:
+#   macOS app:  src-tauri/target/release/bundle/macos/Snaplark.app
+#   DMG:        src-tauri/target/release/bundle/dmg/Snaplark_0.1.0_aarch64.dmg
 ```
 
-The built app will be in `src-tauri/target/release/bundle/`.
-
-## Project Structure
+### Project Structure
 
 ```
 snaplark/
-├── src/                    # React frontend
-│   ├── components/         # UI components
-│   ├── hooks/              # Custom React hooks
-│   ├── stores/             # Zustand state stores
-│   ├── utils/              # Canvas drawing utilities
-│   └── styles/             # Global styles
-├── src-tauri/              # Rust backend
+├── src/                        # React frontend
+│   ├── components/
+│   │   ├── CaptureOverlay.tsx  # Region selection overlay
+│   │   ├── AnnotationCanvas.tsx# Canvas drawing layer
+│   │   ├── Toolbar.tsx         # Tool bar (copy, save, pin)
+│   │   ├── PinWindow.tsx       # Pinned screenshot window
+│   │   └── ColorPicker.tsx     # Color selection
+│   ├── hooks/                  # Custom React hooks
+│   ├── stores/                 # Zustand state stores
+│   └── utils/                  # Canvas utilities
+├── src-tauri/                  # Rust backend
 │   └── src/
-│       ├── capture/        # Screen capture (ScreenCaptureKit)
-│       ├── window/         # Window detection (Accessibility API)
-│       ├── hotkey/         # Global hotkey management
-│       ├── image_processing/ # Image manipulation
-│       └── commands.rs     # Tauri IPC command handlers
-└── PLAN.md                 # Detailed project plan
+│       ├── capture/            # ScreenCaptureKit integration
+│       ├── window/             # Window detection (Accessibility API)
+│       ├── hotkey/             # Global hotkey management
+│       ├── clipboard.rs        # macOS clipboard (NSPasteboard)
+│       ├── image_processing/   # Image encoding & conversion
+│       └── commands.rs         # Tauri IPC commands
+├── docs/
+│   └── ARCHITECTURE.md         # System architecture documentation
+└── .github/workflows/          # CI/CD pipelines
 ```
+
+For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Contributing
 
