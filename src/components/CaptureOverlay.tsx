@@ -29,6 +29,7 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [dragCurrent, setDragCurrent] = useState<{ x: number; y: number } | null>(null);
+  const [hidden, setHidden] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // Fetch window list on mount
@@ -90,6 +91,28 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     setDragCurrent({ x: e.screenX, y: e.screenY });
   }, []);
 
+  const captureRegion = async (region: Region) => {
+    try {
+      setHidden(true);
+      await new Promise((r) => setTimeout(r, 100));
+      const base64 = await invoke<string>("capture_region", { region });
+      onCapture(`data:image/png;base64,${base64}`);
+    } catch (err) {
+      console.error("Capture failed:", err);
+      setHidden(false);
+      onCancel();
+    }
+  };
+
+  const getSelectionRegion = (): Region | null => {
+    if (!dragStart || !dragCurrent) return null;
+    const x = Math.min(dragStart.x, dragCurrent.x);
+    const y = Math.min(dragStart.y, dragCurrent.y);
+    const width = Math.abs(dragCurrent.x - dragStart.x);
+    const height = Math.abs(dragCurrent.y - dragStart.y);
+    return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
+  };
+
   const handleMouseUp = useCallback(async () => {
     if (isDragging && dragStart && dragCurrent) {
       const region = getSelectionRegion();
@@ -113,31 +136,7 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     setDragCurrent(null);
   }, [isDragging, dragStart, dragCurrent, hoveredWindow]);
 
-  const [hidden, setHidden] = useState(false);
-
-  const captureRegion = async (region: Region) => {
-    try {
-      setHidden(true);
-      await new Promise((r) => setTimeout(r, 100));
-      const base64 = await invoke<string>("capture_region", { region });
-      onCapture(`data:image/png;base64,${base64}`);
-    } catch (err) {
-      console.error("Capture failed:", err);
-      setHidden(false);
-      onCancel();
-    }
-  };
-
-  const getSelectionRegion = (): Region | null => {
-    if (!dragStart || !dragCurrent) return null;
-    const x = Math.min(dragStart.x, dragCurrent.x);
-    const y = Math.min(dragStart.y, dragCurrent.y);
-    const width = Math.abs(dragCurrent.x - dragStart.x);
-    const height = Math.abs(dragCurrent.y - dragStart.y);
-    return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
-  };
-
-    const selection = getSelectionRegion();
+  const selection = getSelectionRegion();
 
   return (
     <div

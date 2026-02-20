@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useCaptureStore, type AnnotationTool, type BlurSize } from "../stores/captureStore";
 import { ColorPicker } from "./ColorPicker";
 
@@ -38,9 +38,48 @@ export function Toolbar({ onCopy, onSave, onPin }: ToolbarProps) {
 
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showStrokeMenu, setShowStrokeMenu] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 1500);
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await onCopy();
+      showToast("Copied!");
+    } catch (err) {
+      console.error("Copy failed:", err);
+      showToast("Copy failed");
+    }
+  }, [onCopy, showToast]);
+
+  const handlePin = useCallback(async () => {
+    if (!onPin) return;
+    try {
+      await onPin();
+      showToast("Pinned!");
+    } catch (err) {
+      console.error("Pin failed:", err);
+      showToast("Pin failed");
+    }
+  }, [onPin, showToast]);
+
+  // Cmd+C shortcut for copy
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey && e.key === "c") {
+        e.preventDefault();
+        handleCopy();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleCopy]);
 
   return (
-    <div className="flex items-center gap-1 p-2 bg-white border-b shadow-sm select-none relative">
+    <div className="relative flex items-center gap-1 p-2 bg-white border-b shadow-sm select-none">
       {/* Tool buttons */}
       {tools.map((tool) => (
         <button
@@ -163,10 +202,11 @@ export function Toolbar({ onCopy, onSave, onPin }: ToolbarProps) {
 
       <div className="flex-1" />
 
-      {/* Actions */}
+      {/* Action buttons */}
       <button
-        onClick={onCopy}
+        onClick={handleCopy}
         className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+        title="Copy to clipboard (⌘C)"
       >
         📋 Copy
       </button>
@@ -178,11 +218,19 @@ export function Toolbar({ onCopy, onSave, onPin }: ToolbarProps) {
       </button>
       {onPin && (
         <button
-          onClick={onPin}
+          onClick={handlePin}
           className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          title="Pin to screen"
         >
           📌 Pin
         </button>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-4 py-2 bg-black/80 text-white text-sm rounded-lg shadow-lg z-50">
+          {toast}
+        </div>
       )}
     </div>
   );

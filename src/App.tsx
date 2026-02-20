@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { CaptureOverlay } from "./components/CaptureOverlay";
 import { Toolbar } from "./components/Toolbar";
+import { PinWindow } from "./components/PinWindow";
 import { AnnotationCanvas } from "./components/AnnotationCanvas";
 import { SaveDialog } from "./components/SaveDialog";
 import { useCaptureStore } from "./stores/captureStore";
@@ -18,9 +19,22 @@ function App() {
   const setShowSaveDialog = useCaptureStore((s) => s.setShowSaveDialog);
   const clearAnnotations = useCaptureStore((s) => s.clearAnnotations);
 
+  const [isPinWindow, setIsPinWindow] = useState(false);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Detect if this window instance is a pin window
+  useEffect(() => {
+    const checkPin = () => {
+      if ((window as any).__PIN_DATA__) {
+        setIsPinWindow(true);
+      }
+    };
+    checkPin();
+    window.addEventListener("pin-data-ready", checkPin);
+    return () => window.removeEventListener("pin-data-ready", checkPin);
+  }, []);
 
   // Listen for global hotkey trigger from Rust backend
   useEffect(() => {
@@ -78,7 +92,7 @@ function App() {
     handleCapture(canvas.toDataURL());
   }, [handleCapture]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts for undo/redo/escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (mode !== "annotating") return;
@@ -107,6 +121,23 @@ function App() {
       ]);
     } catch (err) {
       console.error("Failed to copy:", err);
+    }
+  }, [annotations]);
+
+  const handlePin = useCallback(async () => {
+    if (!bgCanvasRef.current) return;
+    const dataUrl = exportCanvas(bgCanvasRef.current, annotations, "png");
+    const base64 = dataUrl.split(",")[1];
+    const canvas = bgCanvasRef.current;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("pin_screenshot", {
+        imageData: base64,
+        width: canvas.width,
+        height: canvas.height,
+      });
+    } catch (err) {
+      console.error("Pin failed:", err);
     }
   }, [annotations]);
 
@@ -142,6 +173,11 @@ function App() {
     [annotations, setShowSaveDialog]
   );
 
+  // Early return for pin windows — must be after all hooks
+  if (isPinWindow) {
+    return <PinWindow />;
+  }
+
   return (
     <div className="min-h-screen bg-transparent">
       {mode === "idle" && (
@@ -149,7 +185,9 @@ function App() {
           <div className="text-center p-8 rounded-2xl bg-white/90 shadow-xl backdrop-blur-sm">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">📸 Snaplark</h1>
             <p className="text-gray-500 mb-6">
-              Press <kbd className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">⌘⇧X</kbd> to capture
+              Press{" "}
+              <kbd className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">⌘⇧X</kbd> to
+              capture
             </p>
             <div className="flex gap-3 justify-center">
               <button
@@ -175,7 +213,7 @@ function App() {
 
       {mode === "annotating" && (
         <div className="flex flex-col h-screen">
-          <Toolbar onCopy={handleCopy} onSave={() => setShowSaveDialog(true)} />
+          <Toolbar onCopy={handleCopy} onPin={handlePin} onSave={() => setShowSaveDialog(true)} />
           <div className="flex-1 flex items-center justify-center bg-gray-800/50 overflow-auto p-6">
             <AnnotationCanvas
               backgroundImage={bgImage}
