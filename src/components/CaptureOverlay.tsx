@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow, LogicalSize, LogicalPosition } from "@tauri-apps/api/window";
 
 interface WindowInfo {
   id: number;
@@ -47,6 +48,40 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onCancel]);
+
+  // Make window fullscreen, transparent, frameless, always-on-top for capture
+  useEffect(() => {
+    const win = getCurrentWindow();
+    let savedPos: { x: number; y: number } | null = null;
+    let savedSize: { width: number; height: number } | null = null;
+
+    const setup = async () => {
+      const pos = await win.outerPosition();
+      const size = await win.outerSize();
+      const scaleFactor = await win.scaleFactor();
+      savedPos = { x: pos.x / scaleFactor, y: pos.y / scaleFactor };
+      savedSize = { width: size.width / scaleFactor, height: size.height / scaleFactor };
+
+      await win.setDecorations(false);
+      await win.setAlwaysOnTop(true);
+      await win.setPosition(new LogicalPosition(0, 0));
+      // Use screen dimensions
+      const screenW = window.screen.width;
+      const screenH = window.screen.height;
+      await win.setSize(new LogicalSize(screenW, screenH));
+    };
+    setup();
+
+    return () => {
+      const restore = async () => {
+        await win.setAlwaysOnTop(false);
+        await win.setDecorations(true);
+        if (savedSize) await win.setSize(new LogicalSize(savedSize.width, savedSize.height));
+        if (savedPos) await win.setPosition(new LogicalPosition(savedPos.x, savedPos.y));
+      };
+      restore();
+    };
+  }, []);
 
   const findWindowAt = useCallback(
     (x: number, y: number): WindowInfo | null => {
