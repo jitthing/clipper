@@ -7,12 +7,26 @@ import { PinWindow } from "./components/PinWindow";
 import { AnnotationCanvas } from "./components/AnnotationCanvas";
 import { SaveDialog } from "./components/SaveDialog";
 import { PermissionPanel } from "./components/PermissionPanel";
+import { Toast } from "./components/Toast";
 import { useCaptureStore } from "./stores/captureStore";
 import { exportCanvas } from "./utils/canvas";
 
 interface PermissionStatus {
   screen_recording_granted: boolean;
   accessibility_granted: boolean;
+}
+
+interface ToastState {
+  message: string;
+  variant: "success" | "error";
+}
+
+function formatSaveTimestamp(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return (
+    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-` +
+    `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
+  );
 }
 
 function App() {
@@ -30,8 +44,23 @@ function App() {
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus | null>(null);
+  const [isCopying, setIsCopying] = useState(false);
+  const [isCopySuccess, setIsCopySuccess] = useState(false);
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
+  const [ocrResult, setOcrResult] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const hasScreenPermission = permissionStatus?.screen_recording_granted ?? false;
+
+  const showToast = useCallback((message: string, variant: "success" | "error" = "success") => {
+    setToast({ message, variant });
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const refreshPermissions = useCallback(async () => {
     try {
@@ -140,11 +169,111 @@ function App() {
     ctx.fillRect(100, 300, 600, 250);
     ctx.fillStyle = "#fff";
     ctx.font = "24px sans-serif";
-    ctx.fillText("Demo Screenshot — Draw annotations!", 150, 420);
+    ctx.fillText("Demo Screenshot - Draw annotations!", 150, 420);
     handleCapture(canvas.toDataURL());
   }, [handleCapture]);
 
-  // Keyboard shortcuts for undo/redo/escape
+  const handleCopy = useCallback(async () => {
+    if (!bgCanvasRef.current || isCopying) return;
+
+    setIsCopying(true);
+    try {
+      const dataUrl = exportCanvas(bgCanvasRef.current, annotations, "png");
+      const base64 = dataUrl.split(",")[1];
+      await invoke("copy_to_clipboard", { imageData: base64 });
+      setIsCopySuccess(true);
+      showToast("Copied to clipboard!");
+      window.setTimeout(() => setIsCopySuccess(false), 1000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+      showToast("Copy failed", "error");
+      setIsCopySuccess(false);
+    } finally {
+      setIsCopying(false);
+    }
+  }, [annotations, isCopying, showToast]);
+
+  const handleOcr = useCallback(async () => {
+    if (!bgCanvasRef.current || isOcrLoading) return;
+
+    setIsOcrLoading(true);
+    try {
+      const dataUrl = exportCanvas(bgCanvasRef.current, annotations, "png");
+      const base64 = dataUrl.split(",")[1];
+      const text = await invoke<string>("ocr_image", { imageData: base64 });
+      setOcrResult(text || "");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("OCR failed:", err);
+      showToast(`OCR failed: ${message}`, "error");
+    } finally {
+      setIsOcrLoading(false);
+    }
+  }, [annotations, isOcrLoading, showToast]);
+
+  const handlePin = useCallback(async () => {
+    if (!bgCanvasRef.current) return;
+    const dataUrl = exportCanvas(bgCanvasRef.current, annotations, "png");
+    const base64 = dataUrl.split(",")[1];
+    const canvas = bgCanvasRef.current;
+    try {
+      await invoke("pin_screenshot", {
+        imageData: base64,
+        width: canvas.width,
+        height: canvas.height,
+      });
+    } catch (err) {
+      console.error("Pin failed:", err);
+      showToast("Pin failed", "error");
+    }
+  }, [annotations, showToast]);
+
+  const handleSave = useCallback(
+    async (format: "png" | "jpg", quality: number) => {
+      if (!bgCanvasRef.current) return;
+
+      const dataUrl = exportCanvas(bgCanvasRef.current, annotations, format, quality);
+      const ext = format === "jpg" ? "jpg" : "png";
+      const defaultPath = `~/Downloads/snaplark-${formatSaveTimestamp(new Date())}.${ext}`;
+
+      try {
+        const { save } = await import("@tauri-apps/plugin-dialog");
+        const filePath = await save({
+          defaultPath,
+          filters: [{ name: format.toUpperCase(), extensions: [ext] }],
+        });
+
+        if (!filePath) {
+          setShowSaveDialog(false);
+          return;
+        }
+
+        const base64 = dataUrl.split(",")[1];
+        await invoke("save_to_file", { imageData: base64, path: filePath, format: ext });
+        showToast(`Saved to ${filePath}`);
+      } catch (err) {
+        console.error("Save failed:", err);
+        showToast("Save failed", "error");
+      }
+
+      setShowSaveDialog(false);
+    },
+    [annotations, setShowSaveDialog, showToast]
+  );
+
+  const handleCopyOcrText = useCallback(async () => {
+    if (!ocrResult) return;
+
+    try {
+      await navigator.clipboard.writeText(ocrResult);
+      showToast("Copied OCR text to clipboard!");
+    } catch (err) {
+      console.error("Failed to copy OCR text:", err);
+      showToast("Failed to copy OCR text", "error");
+    }
+  }, [ocrResult, showToast]);
+
+  // Keyboard shortcuts for undo/redo/escape/OCR
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (mode !== "annotating") return;
@@ -154,6 +283,9 @@ function App() {
       } else if (e.key === "z" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         undo();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        handleOcr();
       } else if (e.key === "Escape") {
         setMode("idle");
         hideMainWindow();
@@ -161,72 +293,9 @@ function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mode, undo, redo, setMode, hideMainWindow]);
+  }, [mode, undo, redo, handleOcr, setMode, hideMainWindow]);
 
-  const handleCopy = useCallback(async () => {
-    if (!bgCanvasRef.current) return;
-    const dataUrl = exportCanvas(bgCanvasRef.current, annotations, "png");
-    const res = await fetch(dataUrl);
-    const blob = await res.blob();
-    try {
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob }),
-      ]);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  }, [annotations]);
-
-  const handlePin = useCallback(async () => {
-    if (!bgCanvasRef.current) return;
-    const dataUrl = exportCanvas(bgCanvasRef.current, annotations, "png");
-    const base64 = dataUrl.split(",")[1];
-    const canvas = bgCanvasRef.current;
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("pin_screenshot", {
-        imageData: base64,
-        width: canvas.width,
-        height: canvas.height,
-      });
-    } catch (err) {
-      console.error("Pin failed:", err);
-    }
-  }, [annotations]);
-
-  const handleSave = useCallback(
-    async (format: "png" | "jpg", quality: number) => {
-      if (!bgCanvasRef.current) return;
-      const dataUrl = exportCanvas(bgCanvasRef.current, annotations, format, quality);
-      const now = new Date();
-      const ts = now.toISOString().replace(/T/, "_").replace(/:/g, "-").slice(0, 19);
-      const ext = format === "jpg" ? "jpg" : "png";
-      const defaultName = `Snaplark_${ts}.${ext}`;
-
-      try {
-        const { save } = await import("@tauri-apps/plugin-dialog");
-        const filePath = await save({
-          defaultPath: defaultName,
-          filters: [{ name: format.toUpperCase(), extensions: [ext] }],
-        });
-        if (filePath) {
-          const { invoke } = await import("@tauri-apps/api/core");
-          const base64 = dataUrl.split(",")[1];
-          await invoke("save_to_file", { imageData: base64, path: filePath, format: ext });
-        }
-      } catch {
-        // Fallback: browser download
-        const link = document.createElement("a");
-        link.download = defaultName;
-        link.href = dataUrl;
-        link.click();
-      }
-      setShowSaveDialog(false);
-    },
-    [annotations, setShowSaveDialog]
-  );
-
-  // Early return for pin windows — must be after all hooks
+  // Early return for pin windows - must be after all hooks
   if (isPinWindow) {
     return <PinWindow />;
   }
@@ -234,11 +303,11 @@ function App() {
   return (
     <div className="min-h-screen bg-transparent">
       {mode === "idle" && (
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center p-8 rounded-2xl bg-white/95 shadow-xl backdrop-blur-sm max-w-xl">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Snaplark</h1>
-            <p className="text-gray-600 mb-6">
-              Press <kbd className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">⌘⇧X</kbd> to
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="max-w-xl rounded-2xl bg-white/95 p-8 text-center shadow-xl backdrop-blur-sm">
+            <h1 className="mb-2 text-4xl font-bold text-gray-900">Snaplark</h1>
+            <p className="mb-6 text-gray-600">
+              Press <kbd className="rounded bg-gray-100 px-2 py-1 font-mono text-sm">⌘⇧X</kbd> to
               open the capture overlay from background mode.
             </p>
             {!hasScreenPermission && permissionStatus ? (
@@ -260,18 +329,18 @@ function App() {
                 onRefresh={refreshPermissions}
               />
             ) : (
-              <div className="flex gap-3 justify-center">
+              <div className="flex justify-center gap-3">
                 <button
                   onClick={() => {
                     startCaptureIfAllowed();
                   }}
-                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+                  className="rounded-lg bg-blue-500 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-600"
                 >
                   Start Capture
                 </button>
                 <button
                   onClick={handleDemoCapture}
-                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                  className="rounded-lg bg-gray-200 px-6 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-300"
                 >
                   Demo Mode
                 </button>
@@ -300,14 +369,57 @@ function App() {
               height={canvasSize.height}
             />
           </div>
+
+          {toast && <Toast message={toast.message} variant={toast.variant} />}
+
           <FloatingToolbar
             onCopy={handleCopy}
+            onOcr={handleOcr}
             onPin={handlePin}
             onSave={() => setShowSaveDialog(true)}
             onCloseWindow={hideMainWindow}
+            isCopying={isCopying}
+            isCopySuccess={isCopySuccess}
+            isOcrLoading={isOcrLoading}
           />
+
           {showSaveDialog && (
             <SaveDialog onSave={handleSave} onCancel={() => setShowSaveDialog(false)} />
+          )}
+
+          {ocrResult !== null && (
+            <div
+              className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4"
+              onClick={() => setOcrResult(null)}
+            >
+              <div
+                className="w-full max-w-2xl rounded-2xl border border-white/10 bg-gray-900/95 p-5 text-white shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold tracking-wide text-white/90">OCR Result</h2>
+                  <button
+                    onClick={() => setOcrResult(null)}
+                    className="rounded-md px-2 py-1 text-xs text-white/70 hover:bg-white/10 hover:text-white"
+                  >
+                    Close
+                  </button>
+                </div>
+                <textarea
+                  readOnly
+                  value={ocrResult}
+                  className="h-60 w-full resize-none rounded-xl border border-white/15 bg-black/35 p-3 text-sm text-white outline-none"
+                />
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    onClick={handleCopyOcrText}
+                    className="rounded-lg bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-600"
+                  >
+                    Copy Text
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
