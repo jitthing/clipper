@@ -30,6 +30,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Frontend lint
+        run: npx tsc --noEmit
+
+      - name: Frontend build
+        run: npm run build
+
       - name: Rust format check
         working-directory: src-tauri
         run: cargo fmt --check
@@ -41,12 +47,6 @@ jobs:
       - name: Rust tests
         working-directory: src-tauri
         run: cargo test
-
-      - name: Frontend lint
-        run: npx tsc --noEmit
-
-      - name: Frontend build
-        run: npm run build
 
       - name: Rust build
         working-directory: src-tauri
