@@ -6,9 +6,9 @@ type Boolean = u8;
 type CFDictionaryRef = *const c_void;
 type CFStringRef = *const c_void;
 type CFTypeRef = *const c_void;
+type CFBooleanRef = *const c_void;
 
 const UTF8: u32 = 0x08000100;
-const K_CF_BOOLEAN_TRUE: *const c_void = 0x1 as *const c_void;
 
 #[link(name = "CoreGraphics", kind = "framework")]
 extern "C" {
@@ -38,6 +38,8 @@ extern "C" {
         value_callbacks: *const c_void,
     ) -> CFDictionaryRef;
     fn CFRelease(cf: CFTypeRef);
+
+    static kCFBooleanTrue: CFBooleanRef;
 }
 
 fn open_settings_url(url: &str) -> Result<(), String> {
@@ -75,7 +77,7 @@ pub fn request_accessibility_permission() -> Result<bool, String> {
         }
 
         let keys = [key as *const c_void];
-        let values = [K_CF_BOOLEAN_TRUE];
+        let values = [kCFBooleanTrue as *const c_void];
         let options = CFDictionaryCreate(
             std::ptr::null(),
             keys.as_ptr(),
