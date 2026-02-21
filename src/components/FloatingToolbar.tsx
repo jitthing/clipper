@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useCaptureStore, type AnnotationTool, type BlurSize } from "../stores/captureStore";
 
 const tools: { id: AnnotationTool; icon: string; label: string }[] = [
@@ -52,6 +52,7 @@ export function FloatingToolbar({ onCopy, onSave, onPin, onCloseWindow }: Floati
   const [toast, setToast] = useState<string | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
 
   const toolbarStyle = useMemo<CSSProperties>(() => {
     if (!position) {
@@ -114,14 +115,24 @@ export function FloatingToolbar({ onCopy, onSave, onPin, onCloseWindow }: Floati
     return () => window.removeEventListener("keydown", handler);
   }, [handleCopy]);
 
+  // Dismiss popovers when clicking outside the toolbar
+  useEffect(() => {
+    if (!showColorPicker && !showStrokeMenu) return;
+    const handler = () => dismissPopovers();
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showColorPicker, showStrokeMenu, dismissPopovers]);
+
   useEffect(() => {
     if (!dragOffset) return;
 
     const onMove = (e: PointerEvent) => {
       const nextX = e.clientX - dragOffset.x;
       const nextY = e.clientY - dragOffset.y;
-      const maxX = window.innerWidth - 24;
-      const maxY = window.innerHeight - 24;
+      const toolbarW = toolbarRef.current ? toolbarRef.current.offsetWidth : 0;
+      const toolbarH = toolbarRef.current ? toolbarRef.current.offsetHeight : 0;
+      const maxX = window.innerWidth - toolbarW - 8;
+      const maxY = window.innerHeight - toolbarH - 8;
       setPosition({
         x: Math.max(8, Math.min(maxX, nextX)),
         y: Math.max(8, Math.min(maxY, nextY)),
@@ -145,6 +156,7 @@ export function FloatingToolbar({ onCopy, onSave, onPin, onCloseWindow }: Floati
       className="fixed z-40 select-none"
       style={toolbarStyle}
       onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       {toast && (
         <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-black/80 px-3 py-1.5 text-xs text-white shadow-lg animate-fade-in">
@@ -152,7 +164,7 @@ export function FloatingToolbar({ onCopy, onSave, onPin, onCloseWindow }: Floati
         </div>
       )}
 
-      <div className="relative flex h-12 items-center gap-1 rounded-2xl border border-white/10 bg-gray-900/90 px-2 text-white shadow-2xl backdrop-blur-lg">
+      <div ref={toolbarRef} className="relative flex h-12 items-center gap-1 rounded-2xl border border-white/10 bg-gray-900/90 px-2 text-white shadow-2xl backdrop-blur-lg">
         <button
           onPointerDown={(e) => {
             const rect = (e.currentTarget.parentElement as HTMLDivElement).getBoundingClientRect();

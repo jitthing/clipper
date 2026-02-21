@@ -122,7 +122,6 @@ export const useCaptureStore = create<CaptureState>((set) => ({
         annotations: nextAnnotations,
         undoneAnnotations: [...s.undoneAnnotations, removed],
         selectedAnnotationId: null,
-        nextNumber: removed.tool === "number" ? Math.max(1, s.nextNumber - 1) : s.nextNumber,
       };
     }),
 
