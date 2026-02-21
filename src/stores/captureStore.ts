@@ -5,6 +5,7 @@ export type AnnotationTool =
   | "rectangle"
   | "circle"
   | "line"
+  | "pen"
   | "text"
   | "blur"
   | "number";
@@ -29,6 +30,7 @@ export interface Annotation {
   fontSize?: number;
   number?: number;
   blurSize?: BlurSize;
+  points?: Point[];
 }
 
 interface CaptureState {
@@ -57,8 +59,11 @@ interface CaptureState {
   // Annotations + history
   annotations: Annotation[];
   undoneAnnotations: Annotation[];
+  selectedAnnotationId: string | null;
   nextNumber: number;
   addAnnotation: (a: Annotation) => void;
+  setSelectedAnnotation: (id: string | null) => void;
+  deleteSelected: () => void;
   undo: () => void;
   redo: () => void;
   clearAnnotations: () => void;
@@ -93,14 +98,32 @@ export const useCaptureStore = create<CaptureState>((set) => ({
 
   annotations: [],
   undoneAnnotations: [],
+  selectedAnnotationId: null,
   nextNumber: 1,
 
   addAnnotation: (a) =>
     set((s) => ({
       annotations: [...s.annotations, a],
       undoneAnnotations: [],
+      selectedAnnotationId: a.id,
       nextNumber: a.tool === "number" ? s.nextNumber + 1 : s.nextNumber,
     })),
+
+  setSelectedAnnotation: (id) => set({ selectedAnnotationId: id }),
+
+  deleteSelected: () =>
+    set((s) => {
+      if (!s.selectedAnnotationId) return s;
+      const idx = s.annotations.findIndex((ann) => ann.id === s.selectedAnnotationId);
+      if (idx === -1) return { selectedAnnotationId: null };
+      const removed = s.annotations[idx];
+      const nextAnnotations = s.annotations.filter((ann) => ann.id !== s.selectedAnnotationId);
+      return {
+        annotations: nextAnnotations,
+        undoneAnnotations: [...s.undoneAnnotations, removed],
+        selectedAnnotationId: null,
+      };
+    }),
 
   undo: () =>
     set((s) => {
@@ -109,6 +132,7 @@ export const useCaptureStore = create<CaptureState>((set) => ({
       return {
         annotations: s.annotations.slice(0, -1),
         undoneAnnotations: [...s.undoneAnnotations, last],
+        selectedAnnotationId: s.selectedAnnotationId === last.id ? null : s.selectedAnnotationId,
         nextNumber: last.tool === "number" ? s.nextNumber - 1 : s.nextNumber,
       };
     }),
@@ -120,11 +144,13 @@ export const useCaptureStore = create<CaptureState>((set) => ({
       return {
         annotations: [...s.annotations, last],
         undoneAnnotations: s.undoneAnnotations.slice(0, -1),
+        selectedAnnotationId: last.id,
         nextNumber: last.tool === "number" ? s.nextNumber + 1 : s.nextNumber,
       };
     }),
 
-  clearAnnotations: () => set({ annotations: [], undoneAnnotations: [], nextNumber: 1 }),
+  clearAnnotations: () =>
+    set({ annotations: [], undoneAnnotations: [], selectedAnnotationId: null, nextNumber: 1 }),
 
   showSaveDialog: false,
   setShowSaveDialog: (v) => set({ showSaveDialog: v }),
