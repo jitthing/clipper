@@ -106,6 +106,9 @@ export function FloatingToolbar({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey && e.key.toLowerCase() === "c") {
+        // Don't intercept Cmd+C when focus is in a text input (e.g. OCR result textarea)
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "TEXTAREA" || tag === "INPUT") return;
         e.preventDefault();
         handleCopy();
       }
