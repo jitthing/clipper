@@ -96,6 +96,33 @@ export function drawLine(
   ctx.stroke();
 }
 
+export function drawPen(
+  ctx: CanvasRenderingContext2D,
+  points: { x: number; y: number }[],
+  color: string,
+  lineWidth: number
+) {
+  if (points.length === 0) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  if (points.length === 1) {
+    ctx.lineTo(points[0].x + 0.01, points[0].y + 0.01);
+  } else {
+    for (let i = 1; i < points.length - 1; i++) {
+      const midX = (points[i].x + points[i + 1].x) / 2;
+      const midY = (points[i].y + points[i + 1].y) / 2;
+      ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
+    }
+    const last = points[points.length - 1];
+    ctx.lineTo(last.x, last.y);
+  }
+  ctx.stroke();
+}
+
 export function drawText(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -215,6 +242,11 @@ export function renderAnnotation(
       break;
     case "line":
       drawLine(ctx, ann.startX, ann.startY, ann.endX, ann.endY, ann.color, ann.strokeWidth);
+      break;
+    case "pen":
+      if (ann.points && ann.points.length > 0) {
+        drawPen(ctx, ann.points, ann.color, ann.strokeWidth);
+      }
       break;
     case "text":
       if (ann.text) {

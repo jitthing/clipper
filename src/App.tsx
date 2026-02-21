@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { CaptureOverlay } from "./components/CaptureOverlay";
-import { Toolbar } from "./components/Toolbar";
+import { FloatingToolbar } from "./components/FloatingToolbar";
 import { PinWindow } from "./components/PinWindow";
 import { AnnotationCanvas } from "./components/AnnotationCanvas";
 import { SaveDialog } from "./components/SaveDialog";
@@ -292,15 +292,20 @@ function App() {
       )}
 
       {mode === "annotating" && (
-        <div className="flex flex-col h-screen">
-          <Toolbar onCopy={handleCopy} onPin={handlePin} onSave={() => setShowSaveDialog(true)} />
-          <div className="flex-1 flex items-center justify-center bg-gray-800/50 overflow-auto p-6">
+        <div className="relative h-screen overflow-auto bg-black/45 p-6">
+          <div className="flex min-h-full items-center justify-center">
             <AnnotationCanvas
               backgroundImage={bgImage}
               width={canvasSize.width}
               height={canvasSize.height}
             />
           </div>
+          <FloatingToolbar
+            onCopy={handleCopy}
+            onPin={handlePin}
+            onSave={() => setShowSaveDialog(true)}
+            onCloseWindow={hideMainWindow}
+          />
           {showSaveDialog && (
             <SaveDialog onSave={handleSave} onCancel={() => setShowSaveDialog(false)} />
           )}
