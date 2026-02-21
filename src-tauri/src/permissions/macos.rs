@@ -76,8 +76,8 @@ pub fn request_accessibility_permission() -> Result<bool, String> {
             return Err("Failed to create AX prompt key".to_string());
         }
 
-        let keys = [key as *const c_void];
-        let values = [kCFBooleanTrue as *const c_void];
+        let keys = [key];
+        let values = [kCFBooleanTrue];
         let options = CFDictionaryCreate(
             std::ptr::null(),
             keys.as_ptr(),

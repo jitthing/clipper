@@ -6,9 +6,10 @@
 /// TODO: Implement hotkey registration in the Tauri setup hook.
 /// The actual registration happens in lib.rs using the plugin,
 /// but this module will handle custom hotkey configuration.
-
+#[allow(dead_code)]
 pub const DEFAULT_CAPTURE_HOTKEY: &str = "CommandOrControl+Shift+X";
 
+#[allow(dead_code)]
 pub struct HotkeyConfig {
     pub capture: String,
 }

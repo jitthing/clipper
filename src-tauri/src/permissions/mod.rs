@@ -9,7 +9,7 @@ pub struct PermissionStatus {
 pub fn get_permission_status() -> PermissionStatus {
     #[cfg(target_os = "macos")]
     {
-        return macos::get_permission_status();
+        macos::get_permission_status()
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -23,7 +23,7 @@ pub fn get_permission_status() -> PermissionStatus {
 pub fn request_screen_recording_permission() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        return macos::request_screen_recording_permission();
+        macos::request_screen_recording_permission()
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -34,7 +34,7 @@ pub fn request_screen_recording_permission() -> Result<bool, String> {
 pub fn request_accessibility_permission() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        return macos::request_accessibility_permission();
+        macos::request_accessibility_permission()
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -45,7 +45,7 @@ pub fn request_accessibility_permission() -> Result<bool, String> {
 pub fn open_screen_recording_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        return macos::open_screen_recording_settings();
+        macos::open_screen_recording_settings()
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -56,7 +56,7 @@ pub fn open_screen_recording_settings() -> Result<(), String> {
 pub fn open_accessibility_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        return macos::open_accessibility_settings();
+        macos::open_accessibility_settings()
     }
     #[cfg(not(target_os = "macos"))]
     {
