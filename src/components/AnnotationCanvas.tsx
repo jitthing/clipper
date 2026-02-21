@@ -277,22 +277,20 @@ export function AnnotationCanvas({ backgroundImage, width, height }: AnnotationC
     setCurrentPos(pos);
 
     if (activeTool === "pen") {
-      setPenPoints((prev) => {
-        const next = [...prev, pos];
-        const preview: Annotation = {
-          id: "preview",
-          tool: "pen",
-          startX: next[0].x,
-          startY: next[0].y,
-          endX: pos.x,
-          endY: pos.y,
-          color,
-          strokeWidth,
-          points: next,
-        };
-        renderScene(preview);
-        return next;
-      });
+      const next = [...penPoints, pos];
+      setPenPoints(next);
+      const preview: Annotation = {
+        id: "preview",
+        tool: "pen",
+        startX: next[0]?.x ?? pos.x,
+        startY: next[0]?.y ?? pos.y,
+        endX: pos.x,
+        endY: pos.y,
+        color,
+        strokeWidth,
+        points: next,
+      };
+      renderScene(preview);
       return;
     }
 
