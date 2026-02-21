@@ -45,7 +45,9 @@ unsafe fn dict_get_string(dict: CFDictionaryRef, key: &str) -> Option<String> {
     let k = cf_str(key);
     let val = CFDictionaryGetValue(dict, k);
     CFRelease(k);
-    if val.is_null() { return None; }
+    if val.is_null() {
+        return None;
+    }
     let ptr = CFStringGetCStringPtr(val as CFStringRef, UTF8);
     if !ptr.is_null() {
         return Some(CStr::from_ptr(ptr).to_string_lossy().into_owned());
@@ -62,9 +64,15 @@ unsafe fn dict_get_f64(dict: CFDictionaryRef, key: &str) -> Option<f64> {
     let k = cf_str(key);
     let val = CFDictionaryGetValue(dict, k);
     CFRelease(k);
-    if val.is_null() { return None; }
+    if val.is_null() {
+        return None;
+    }
     let mut out: f64 = 0.0;
-    if CFNumberGetValue(val, 13 /* kCFNumberFloat64Type */, &mut out as *mut f64 as *mut c_void) {
+    if CFNumberGetValue(
+        val,
+        13, /* kCFNumberFloat64Type */
+        &mut out as *mut f64 as *mut c_void,
+    ) {
         Some(out)
     } else {
         None
@@ -75,8 +83,15 @@ unsafe fn dict_get_bounds(dict: CFDictionaryRef) -> Option<(f64, f64, f64, f64)>
     let k = cf_str("kCGWindowBounds");
     let val = CFDictionaryGetValue(dict, k);
     CFRelease(k);
-    if val.is_null() { return None; }
-    let mut rect = CGRect { origin_x: 0.0, origin_y: 0.0, size_w: 0.0, size_h: 0.0 };
+    if val.is_null() {
+        return None;
+    }
+    let mut rect = CGRect {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        size_w: 0.0,
+        size_h: 0.0,
+    };
     if CGRectMakeWithDictionaryRepresentation(val, &mut rect) {
         Some((rect.origin_x, rect.origin_y, rect.size_w, rect.size_h))
     } else {
@@ -98,10 +113,16 @@ pub fn list_windows() -> Result<Vec<WindowInfo>, String> {
         for i in 0..count {
             let dict = CFArrayGetValueAtIndex(list, i);
             let layer = dict_get_f64(dict, "kCGWindowLayer").unwrap_or(-1.0) as i32;
-            if layer != 0 { continue; }
+            if layer != 0 {
+                continue;
+            }
 
-            let Some(bounds) = dict_get_bounds(dict) else { continue };
-            if bounds.2 < 50.0 || bounds.3 < 50.0 { continue; }
+            let Some(bounds) = dict_get_bounds(dict) else {
+                continue;
+            };
+            if bounds.2 < 50.0 || bounds.3 < 50.0 {
+                continue;
+            }
 
             let window_id = dict_get_f64(dict, "kCGWindowNumber").unwrap_or(0.0) as u32;
             windows.push(WindowInfo {
