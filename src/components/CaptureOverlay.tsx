@@ -63,18 +63,23 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
       savedSize = { width: size.width / scaleFactor, height: size.height / scaleFactor };
 
       await win.setDecorations(false);
+      await win.setResizable(false);
+      await win.setSkipTaskbar(true);
       await win.setAlwaysOnTop(true);
       await win.setPosition(new LogicalPosition(0, 0));
       // Use screen dimensions
       const screenW = window.screen.width;
       const screenH = window.screen.height;
       await win.setSize(new LogicalSize(screenW, screenH));
+      overlayRef.current?.focus();
     };
     setup();
 
     return () => {
       const restore = async () => {
         await win.setAlwaysOnTop(false);
+        await win.setSkipTaskbar(false);
+        await win.setResizable(true);
         await win.setDecorations(true);
         if (savedSize) await win.setSize(new LogicalSize(savedSize.width, savedSize.height));
         if (savedPos) await win.setPosition(new LogicalPosition(savedPos.x, savedPos.y));

@@ -43,7 +43,12 @@ pub fn capture_screen() -> Result<Vec<u8>, String> {
         let display = CGMainDisplayID();
         let w = CGDisplayPixelsWide(display) as f64;
         let h = CGDisplayPixelsHigh(display) as f64;
-        capture_cg_rect(CGRect { x: 0.0, y: 0.0, w, h })
+        capture_cg_rect(CGRect {
+            x: 0.0,
+            y: 0.0,
+            w,
+            h,
+        })
     }
 }
 
@@ -99,7 +104,7 @@ unsafe fn cg_image_to_png(image: CGImageRef) -> Result<Vec<u8>, String> {
             if px + 3 < len {
                 rgba.push(raw[px + 2]); // R
                 rgba.push(raw[px + 1]); // G
-                rgba.push(raw[px]);     // B
+                rgba.push(raw[px]); // B
                 rgba.push(raw[px + 3]); // A
             }
         }

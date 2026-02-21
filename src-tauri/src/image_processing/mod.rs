@@ -1,10 +1,10 @@
 /// Image processing utilities for screenshots.
 ///
 /// Handles cropping, format conversion, and clipboard operations.
-
 use base64::Engine;
 
 /// Encode raw image bytes to base64 PNG for frontend display.
+#[allow(dead_code)]
 pub fn encode_to_base64_png(data: &[u8], width: u32, height: u32) -> Result<String, String> {
     let img = image::RgbaImage::from_raw(width, height, data.to_vec())
         .ok_or("Failed to create image from raw data")?;
@@ -18,7 +18,14 @@ pub fn encode_to_base64_png(data: &[u8], width: u32, height: u32) -> Result<Stri
 }
 
 /// Save image data to a file.
-pub fn save_image(data: &[u8], width: u32, height: u32, path: &str, format: &str) -> Result<(), String> {
+#[allow(dead_code)]
+pub fn save_image(
+    data: &[u8],
+    width: u32,
+    height: u32,
+    path: &str,
+    format: &str,
+) -> Result<(), String> {
     let img = image::RgbaImage::from_raw(width, height, data.to_vec())
         .ok_or("Failed to create image from raw data")?;
 

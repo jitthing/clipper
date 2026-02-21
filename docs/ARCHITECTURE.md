@@ -45,12 +45,12 @@
 ## Data Flow
 
 ```
-User presses ⌘⇧X
+User presses ⌘⇧X (global, app can stay hidden/background)
        │
        ▼
 ┌─────────────────┐     ┌──────────────────┐
-│ Global Shortcut  │────►│ Capture Screen    │
-│ (Rust plugin)    │     │ (ScreenCaptureKit)│
+│ Global Shortcut  │────►│ Show overlay window│
+│ (Rust plugin)    │     │ + toggle capture   │
 └─────────────────┘     └────────┬─────────┘
                                  │ base64 PNG
                                  ▼
@@ -118,6 +118,12 @@ App
 | `pin_screenshot` | FE → BE | `imageData, width, height` | `String` (window label) | Create pinned window |
 | `close_pin_window` | FE → BE | `label: String` | `()` | Close a pinned window |
 | `list_windows` | FE → BE | — | `Vec<WindowInfo>` | List visible windows |
+| `get_permission_status` | FE → BE | — | `PermissionStatus` | Read Screen Recording + Accessibility state |
+| `request_screen_recording_permission` | FE → BE | — | `bool` | Trigger Screen Recording permission prompt |
+| `request_accessibility_permission` | FE → BE | — | `bool` | Trigger Accessibility permission prompt |
+| `open_screen_recording_settings` | FE → BE | — | `()` | Open macOS Screen Recording settings |
+| `open_accessibility_settings` | FE → BE | — | `()` | Open macOS Accessibility settings |
+| `hide_main_window` | FE → BE | — | `()` | Hide main window (background mode) |
 
 ## State Management (Zustand)
 

@@ -1,15 +1,16 @@
 /// macOS clipboard operations using NSPasteboard API.
-
 #[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs, deprecated)]
 pub fn copy_image_to_clipboard(png_data: &[u8]) -> Result<(), String> {
-    use cocoa::base::{id, nil};
+    use cocoa::base::id;
     use objc::{class, msg_send, sel, sel_impl};
 
     unsafe {
         let pasteboard: id = msg_send![class!(NSPasteboard), generalPasteboard];
         let _: i64 = msg_send![pasteboard, clearContents];
 
-        let png_type: id = msg_send![class!(NSString), stringWithUTF8String: b"public.png\0".as_ptr()];
+        let png_type: id =
+            msg_send![class!(NSString), stringWithUTF8String: c"public.png".as_ptr()];
 
         let ns_data: id = msg_send![class!(NSData), dataWithBytes: png_data.as_ptr()
                                                              length: png_data.len()];

@@ -15,8 +15,10 @@ Built with [Tauri 2.0](https://v2.tauri.app/) — Rust backend, React + TypeScri
 
 | Feature | Status |
 |---|---|
-| Global hotkey (`⌘⇧X`) → region selection overlay | 🚧 In Progress |
-| Smart window detection (Accessibility API) | 🚧 In Progress |
+| Background/menubar mode + global hotkey (`⌘⇧X`) | ✅ Done |
+| Instant capture overlay UX (`ESC` dismiss) | ✅ Done |
+| First-run permissions onboarding (Screen Recording + Accessibility status) | ✅ Done |
+| Smart window detection (window metadata via macOS window APIs) | 🚧 In Progress |
 | Annotation toolbar (arrow, rect, circle, line, text, blur, numbering) | 🚧 In Progress |
 | Color picker | 🚧 In Progress |
 | Copy to clipboard (⌘C) | ✅ Done |
@@ -74,6 +76,32 @@ npm install
 # Run in development mode (starts both Vite dev server and Tauri)
 npm run tauri dev
 ```
+
+### Usage
+
+1. Snaplark runs in background/menubar mode.
+2. Press `⌘⇧X` from anywhere to open the capture overlay.
+3. Press `⌘⇧X` again (or `ESC`) to dismiss the overlay.
+4. Drag to capture a region, then annotate/copy/save/pin.
+
+### macOS Permissions (First Run)
+
+Snaplark checks permission state and shows an in-app onboarding panel when access is missing.
+
+Required:
+- Screen Recording (needed for screenshot capture)
+
+Recommended:
+- Accessibility (improves window metadata and selection UX)
+
+If capture fails or status is missing:
+1. Open Snaplark from the tray icon.
+2. Use the in-app permission panel buttons:
+   - `Request Screen Recording`
+   - `Open Screen Settings`
+   - `Request Accessibility`
+   - `Open Accessibility Settings`
+3. After granting access in System Settings, click `Refresh Status`.
 
 ### Build from Source
 
