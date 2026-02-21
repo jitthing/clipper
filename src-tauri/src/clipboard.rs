@@ -9,7 +9,8 @@ pub fn copy_image_to_clipboard(png_data: &[u8]) -> Result<(), String> {
         let pasteboard: id = msg_send![class!(NSPasteboard), generalPasteboard];
         let _: i64 = msg_send![pasteboard, clearContents];
 
-        let png_type: id = msg_send![class!(NSString), stringWithUTF8String: c"public.png".as_ptr()];
+        let png_type: id =
+            msg_send![class!(NSString), stringWithUTF8String: c"public.png".as_ptr()];
 
         let ns_data: id = msg_send![class!(NSData), dataWithBytes: png_data.as_ptr()
                                                              length: png_data.len()];
