@@ -23,12 +23,25 @@ const fontSizes = [12, 14, 16, 20, 24, 32, 48];
 
 interface FloatingToolbarProps {
   onCopy: () => Promise<void> | void;
+  onOcr?: () => Promise<void> | void;
   onSave: () => void;
   onPin?: () => Promise<void> | void;
   onCloseWindow: () => Promise<void> | void;
+  isCopying?: boolean;
+  isCopySuccess?: boolean;
+  isOcrLoading?: boolean;
 }
 
-export function FloatingToolbar({ onCopy, onSave, onPin, onCloseWindow }: FloatingToolbarProps) {
+export function FloatingToolbar({
+  onCopy,
+  onOcr,
+  onSave,
+  onPin,
+  onCloseWindow,
+  isCopying = false,
+  isCopySuccess = false,
+  isOcrLoading = false,
+}: FloatingToolbarProps) {
   const {
     activeTool,
     setActiveTool,
@@ -49,7 +62,6 @@ export function FloatingToolbar({ onCopy, onSave, onPin, onCloseWindow }: Floati
 
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showStrokeMenu, setShowStrokeMenu] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -73,31 +85,18 @@ export function FloatingToolbar({ onCopy, onSave, onPin, onCloseWindow }: Floati
     setShowStrokeMenu(false);
   }, []);
 
-  const showToast = useCallback((message: string) => {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 1500);
-  }, []);
-
   const handleCopy = useCallback(async () => {
-    try {
-      await onCopy();
-      showToast("Copied");
-    } catch (err) {
-      console.error("Copy failed:", err);
-      showToast("Copy failed");
-    }
-  }, [onCopy, showToast]);
+    await onCopy();
+  }, [onCopy]);
 
   const handlePin = useCallback(async () => {
     if (!onPin) return;
     try {
       await onPin();
-      showToast("Pinned");
     } catch (err) {
       console.error("Pin failed:", err);
-      showToast("Pin failed");
     }
-  }, [onPin, showToast]);
+  }, [onPin]);
 
   const handleClose = useCallback(async () => {
     setMode("idle");
@@ -158,12 +157,6 @@ export function FloatingToolbar({ onCopy, onSave, onPin, onCloseWindow }: Floati
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {toast && (
-        <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-black/80 px-3 py-1.5 text-xs text-white shadow-lg animate-fade-in">
-          {toast}
-        </div>
-      )}
-
       <div ref={toolbarRef} className="relative flex h-12 items-center gap-1 rounded-2xl border border-white/10 bg-gray-900/90 px-2 text-white shadow-2xl backdrop-blur-lg">
         <button
           onPointerDown={(e) => {
@@ -323,11 +316,32 @@ export function FloatingToolbar({ onCopy, onSave, onPin, onCloseWindow }: Floati
 
         <button
           onClick={handleCopy}
-          className="h-8 rounded-lg px-2 text-xs text-white/80 hover:bg-white/10 hover:text-white"
+          disabled={isCopying}
+          className="flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs text-white/80 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           title="Copy"
         >
-          ⧉
+          {isCopying ? (
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border border-white/70 border-t-transparent" />
+          ) : isCopySuccess ? (
+            "✓"
+          ) : (
+            "⧉"
+          )}
         </button>
+        {onOcr && (
+          <button
+            onClick={onOcr}
+            disabled={isOcrLoading}
+            className="flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs text-white/80 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            title="OCR"
+          >
+            {isOcrLoading ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border border-white/70 border-t-transparent" />
+            ) : (
+              "📝"
+            )}
+          </button>
+        )}
         <button
           onClick={onSave}
           className="h-8 rounded-lg px-2 text-xs text-white/80 hover:bg-white/10 hover:text-white"

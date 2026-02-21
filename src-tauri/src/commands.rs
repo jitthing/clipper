@@ -1,5 +1,6 @@
 use crate::capture;
 use crate::clipboard;
+use crate::ocr;
 use crate::permissions;
 use crate::window;
 use base64::Engine;
@@ -37,6 +38,14 @@ pub fn copy_to_clipboard(image_data: String) -> Result<(), String> {
         .decode(&image_data)
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
     clipboard::copy_image_to_clipboard(&png_bytes)
+}
+
+#[tauri::command]
+pub fn ocr_image(image_data: String) -> Result<String, String> {
+    let png_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&image_data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+    ocr::recognize_text(&png_bytes)
 }
 
 #[tauri::command]
