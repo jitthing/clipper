@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow, LogicalSize, LogicalPosition } from "@tauri-apps/api/window";
 
 interface WindowInfo {
   id: number;
@@ -20,17 +19,17 @@ interface Region {
 }
 
 interface CaptureOverlayProps {
+  screenshotData: string;
   onCapture: (imageData: string) => void;
   onCancel: () => void;
 }
 
-export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
+export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureOverlayProps) {
   const [windows, setWindows] = useState<WindowInfo[]>([]);
   const [hoveredWindow, setHoveredWindow] = useState<WindowInfo | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [dragCurrent, setDragCurrent] = useState<{ x: number; y: number } | null>(null);
-  const [hidden, setHidden] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // Fetch window list on mount
@@ -49,48 +48,13 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [onCancel]);
 
-  // Make window fullscreen, transparent, frameless, always-on-top for capture
+  // Focus the overlay on mount
   useEffect(() => {
-    const win = getCurrentWindow();
-    let savedPos: { x: number; y: number } | null = null;
-    let savedSize: { width: number; height: number } | null = null;
-
-    const setup = async () => {
-      const pos = await win.outerPosition();
-      const size = await win.outerSize();
-      const scaleFactor = await win.scaleFactor();
-      savedPos = { x: pos.x / scaleFactor, y: pos.y / scaleFactor };
-      savedSize = { width: size.width / scaleFactor, height: size.height / scaleFactor };
-
-      await win.setDecorations(false);
-      await win.setResizable(false);
-      await win.setSkipTaskbar(true);
-      await win.setAlwaysOnTop(true);
-      await win.setPosition(new LogicalPosition(0, 0));
-      // Use screen dimensions
-      const screenW = window.screen.width;
-      const screenH = window.screen.height;
-      await win.setSize(new LogicalSize(screenW, screenH));
-      overlayRef.current?.focus();
-    };
-    setup();
-
-    return () => {
-      const restore = async () => {
-        await win.setAlwaysOnTop(false);
-        await win.setSkipTaskbar(false);
-        await win.setResizable(true);
-        await win.setDecorations(true);
-        if (savedSize) await win.setSize(new LogicalSize(savedSize.width, savedSize.height));
-        if (savedPos) await win.setPosition(new LogicalPosition(savedPos.x, savedPos.y));
-      };
-      restore();
-    };
+    overlayRef.current?.focus();
   }, []);
 
   const findWindowAt = useCallback(
     (x: number, y: number): WindowInfo | null => {
-      // Find smallest window containing the point (most specific)
       let best: WindowInfo | null = null;
       let bestArea = Infinity;
       for (const w of windows) {
@@ -110,39 +74,27 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (dragStart) {
-        const dx = Math.abs(e.screenX - dragStart.x);
-        const dy = Math.abs(e.screenY - dragStart.y);
+        const dx = Math.abs(e.clientX - dragStart.x);
+        const dy = Math.abs(e.clientY - dragStart.y);
         if (!isDragging && (dx > 3 || dy > 3)) {
           setIsDragging(true);
           setHoveredWindow(null);
         }
-        if (isDragging) {
-          setDragCurrent({ x: e.screenX, y: e.screenY });
+        if (isDragging || dx > 3 || dy > 3) {
+          setDragCurrent({ x: e.clientX, y: e.clientY });
         }
       } else {
-        setHoveredWindow(findWindowAt(e.screenX, e.screenY));
+        // Use clientX/clientY since overlay is fullscreen at 0,0
+        setHoveredWindow(findWindowAt(e.clientX, e.clientY));
       }
     },
     [isDragging, dragStart, findWindowAt]
   );
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setDragStart({ x: e.screenX, y: e.screenY });
-    setDragCurrent({ x: e.screenX, y: e.screenY });
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setDragCurrent({ x: e.clientX, y: e.clientY });
   }, []);
-
-  const captureRegion = async (region: Region) => {
-    try {
-      setHidden(true);
-      await new Promise((r) => setTimeout(r, 100));
-      const base64 = await invoke<string>("capture_region", { region });
-      onCapture(`data:image/png;base64,${base64}`);
-    } catch (err) {
-      console.error("Capture failed:", err);
-      setHidden(false);
-      onCancel();
-    }
-  };
 
   const getSelectionRegion = (): Region | null => {
     if (!dragStart || !dragCurrent) return null;
@@ -153,17 +105,32 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
   };
 
+  const cropAndReturn = async (region: Region) => {
+    try {
+      // Strip data URL prefix to get raw base64
+      const base64 = screenshotData.replace(/^data:image\/png;base64,/, "");
+      const croppedBase64 = await invoke<string>("crop_image", {
+        imageData: base64,
+        region,
+      });
+      onCapture(`data:image/png;base64,${croppedBase64}`);
+    } catch (err) {
+      console.error("Crop failed:", err);
+      onCancel();
+    }
+  };
+
   const handleMouseUp = useCallback(async () => {
     if (isDragging && dragStart && dragCurrent) {
       const region = getSelectionRegion();
       if (region && region.width > 5 && region.height > 5) {
-        await captureRegion(region);
+        await cropAndReturn(region);
         return;
       }
     }
     // If no drag or tiny drag, check for window click
     if (hoveredWindow) {
-      await captureRegion({
+      await cropAndReturn({
         x: Math.round(hoveredWindow.x),
         y: Math.round(hoveredWindow.y),
         width: Math.round(hoveredWindow.width),
@@ -174,7 +141,7 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     setIsDragging(false);
     setDragStart(null);
     setDragCurrent(null);
-  }, [isDragging, dragStart, dragCurrent, hoveredWindow]);
+  }, [isDragging, dragStart, dragCurrent, hoveredWindow, screenshotData, onCapture, onCancel]);
 
   const selection = getSelectionRegion();
 
@@ -182,13 +149,28 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
     <div
       ref={overlayRef}
       className="fixed inset-0 z-[9999] cursor-crosshair select-none"
-      style={{ background: "rgba(0,0,0,0.3)", visibility: hidden ? "hidden" : "visible" }}
+      style={{ overflow: "hidden" }}
       onMouseMove={handleMouseMove}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
       tabIndex={0}
       autoFocus
     >
+      {/* Full desktop screenshot as background */}
+      <img
+        src={screenshotData}
+        alt=""
+        className="absolute inset-0 w-full h-full"
+        style={{ objectFit: "cover", pointerEvents: "none" }}
+        draggable={false}
+      />
+
+      {/* Semi-transparent dark overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: "rgba(0,0,0,0.3)" }}
+      />
+
       {/* Instructions */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-lg text-sm pointer-events-none z-10">
         Click and drag to select region · Click a window to capture it ·{" "}
@@ -214,7 +196,7 @@ export function CaptureOverlay({ onCapture, onCancel }: CaptureOverlayProps) {
         </div>
       )}
 
-      {/* Selection rectangle */}
+      {/* Selection rectangle — cuts through the dark overlay to show clear image */}
       {isDragging && selection && selection.width > 0 && selection.height > 0 && (
         <>
           {/* Clear area inside selection (remove overlay tint) */}

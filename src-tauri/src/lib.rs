@@ -103,6 +103,8 @@ pub fn run() {
             commands::open_screen_recording_settings,
             commands::open_accessibility_settings,
             commands::hide_main_window,
+            commands::show_main_window,
+            commands::crop_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Snaplark");

@@ -159,3 +159,37 @@ pub fn hide_main_window(app: AppHandle) -> Result<(), String> {
         .hide()
         .map_err(|e| format!("Failed to hide window: {e}"))
 }
+
+#[tauri::command]
+pub fn show_main_window(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window not found".to_string())?;
+    window
+        .show()
+        .map_err(|e| format!("Failed to show window: {e}"))
+}
+
+#[tauri::command]
+pub fn crop_image(image_data: String, region: Region) -> Result<String, String> {
+    let png_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&image_data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    let img = image::load_from_memory_with_format(&png_bytes, image::ImageFormat::Png)
+        .map_err(|e| format!("Failed to load image: {}", e))?;
+
+    let cropped = img.crop_imm(
+        region.x as u32,
+        region.y as u32,
+        region.width,
+        region.height,
+    );
+
+    let mut buf = std::io::Cursor::new(Vec::new());
+    cropped
+        .write_to(&mut buf, image::ImageFormat::Png)
+        .map_err(|e| format!("Failed to encode cropped image: {}", e))?;
+
+    Ok(base64::engine::general_purpose::STANDARD.encode(buf.into_inner()))
+}

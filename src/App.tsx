@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow, LogicalSize, LogicalPosition } from "@tauri-apps/api/window";
 import { CaptureOverlay } from "./components/CaptureOverlay";
 import { FloatingToolbar } from "./components/FloatingToolbar";
 import { PinWindow } from "./components/PinWindow";
@@ -30,7 +31,9 @@ function App() {
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus | null>(null);
+  const [fullScreenshot, setFullScreenshot] = useState<string | null>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const savedWindowStateRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   const hasScreenPermission = permissionStatus?.screen_recording_granted ?? false;
 
   const refreshPermissions = useCallback(async () => {
@@ -52,13 +55,63 @@ function App() {
     }
   }, []);
 
+  const restoreWindow = useCallback(async () => {
+    const win = getCurrentWindow();
+    await win.setAlwaysOnTop(false);
+    await win.setResizable(true);
+    await win.setDecorations(true);
+    const saved = savedWindowStateRef.current;
+    if (saved) {
+      await win.setSize(new LogicalSize(saved.width, saved.height));
+      await win.setPosition(new LogicalPosition(saved.x, saved.y));
+    }
+    setFullScreenshot(null);
+  }, []);
+
   const startCaptureIfAllowed = useCallback(async () => {
     const status = await refreshPermissions();
     if (!status?.screen_recording_granted) {
       setMode("idle");
       return false;
     }
-    setMode("capturing");
+
+    // Save current window state
+    const win = getCurrentWindow();
+    const pos = await win.outerPosition();
+    const size = await win.outerSize();
+    const scaleFactor = await win.scaleFactor();
+    savedWindowStateRef.current = {
+      x: pos.x / scaleFactor,
+      y: pos.y / scaleFactor,
+      width: size.width / scaleFactor,
+      height: size.height / scaleFactor,
+    };
+
+    // Hide window, capture desktop, then show fullscreen overlay
+    await invoke("hide_main_window");
+    await new Promise((r) => setTimeout(r, 200));
+
+    try {
+      const base64 = await invoke<string>("capture_screen");
+      setFullScreenshot(`data:image/png;base64,${base64}`);
+
+      // Setup window as fullscreen overlay
+      const screenW = window.screen.width;
+      const screenH = window.screen.height;
+      await win.setDecorations(false);
+      await win.setResizable(false);
+      await win.setAlwaysOnTop(true);
+      await win.setPosition(new LogicalPosition(0, 0));
+      await win.setSize(new LogicalSize(screenW, screenH));
+
+      await invoke("show_main_window");
+      setMode("capturing");
+    } catch (err) {
+      console.error("Capture failed:", err);
+      await invoke("show_main_window");
+      setMode("idle");
+    }
+
     return true;
   }, [refreshPermissions, setMode]);
 
@@ -84,6 +137,7 @@ function App() {
     const unlistenCapture = listen("capture-toggle", async () => {
       if (mode === "capturing") {
         setMode("idle");
+        await restoreWindow();
         await hideMainWindow();
         return;
       }
@@ -96,12 +150,16 @@ function App() {
       unlistenCapture.then((f) => f());
       unlistenOpen.then((f) => f());
     };
-  }, [mode, setMode, hideMainWindow, startCaptureIfAllowed]);
+  }, [mode, setMode, hideMainWindow, restoreWindow, startCaptureIfAllowed]);
 
   const handleCapture = useCallback(
-    (imageData: string) => {
+    async (imageData: string) => {
       setCapturedImage(imageData);
       clearAnnotations();
+      setFullScreenshot(null);
+
+      // Restore window before showing annotation view
+      await restoreWindow();
 
       const img = new Image();
       img.onload = () => {
@@ -120,7 +178,7 @@ function App() {
       };
       img.src = imageData;
     },
-    [setCapturedImage, setMode, clearAnnotations]
+    [setCapturedImage, setMode, clearAnnotations, restoreWindow]
   );
 
   const handleDemoCapture = useCallback(() => {
@@ -281,12 +339,14 @@ function App() {
         </div>
       )}
 
-      {mode === "capturing" && (
+      {mode === "capturing" && fullScreenshot && (
         <CaptureOverlay
+          screenshotData={fullScreenshot}
           onCapture={handleCapture}
-          onCancel={() => {
+          onCancel={async () => {
             setMode("idle");
-            hideMainWindow();
+            await restoreWindow();
+            await hideMainWindow();
           }}
         />
       )}
