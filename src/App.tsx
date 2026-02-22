@@ -53,6 +53,8 @@ function App() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const savedWindowStateRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   const hasScreenPermission = permissionStatus?.screen_recording_granted ?? false;
 
   const showToast = useCallback((message: string, variant: "success" | "error" = "success") => {
@@ -161,16 +163,24 @@ function App() {
     refreshPermissions();
   }, [refreshPermissions]);
 
-  // Listen for global hotkey trigger from Rust backend
+  // Stable refs for callbacks used in the event listener
+  const startCaptureRef = useRef(startCaptureIfAllowed);
+  startCaptureRef.current = startCaptureIfAllowed;
+  const restoreWindowRef = useRef(restoreWindow);
+  restoreWindowRef.current = restoreWindow;
+
+  // Listen for global hotkey trigger from Rust backend (register once)
   useEffect(() => {
     const unlistenCapture = listen("capture-toggle", async () => {
-      if (mode === "capturing") {
+      if (modeRef.current === "capturing") {
         setMode("idle");
-        await restoreWindow();
+        await restoreWindowRef.current();
         await hideMainWindow();
         return;
       }
-      await startCaptureIfAllowed();
+      if (modeRef.current === "idle") {
+        await startCaptureRef.current();
+      }
     });
     const unlistenOpen = listen("open-main-view", () => {
       setMode("idle");
@@ -179,7 +189,7 @@ function App() {
       unlistenCapture.then((f) => f());
       unlistenOpen.then((f) => f());
     };
-  }, [mode, setMode, hideMainWindow, restoreWindow, startCaptureIfAllowed]);
+  }, [setMode, hideMainWindow]);
 
   const handleCapture = useCallback(
     async (imageData: string) => {

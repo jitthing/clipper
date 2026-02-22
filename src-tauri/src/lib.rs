@@ -80,13 +80,10 @@ pub fn run() {
             let handle = app.handle().clone();
             app.global_shortcut()
                 .on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                    if let Some(window) = handle.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                        let _ = window.emit("capture-toggle", ());
-                    } else {
-                        let _ = handle.emit("capture-toggle", ());
-                    }
+                    // Don't show the window here — the frontend capture flow
+                    // needs the window hidden while taking the desktop screenshot.
+                    // Just emit the event; the frontend will show/hide as needed.
+                    let _ = handle.emit("capture-toggle", ());
                 })?;
             Ok(())
         })
