@@ -19,6 +19,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        .manage(commands::CaptureState::default())
         .on_menu_event(|app, event| match event.id().as_ref() {
             "show-main" => {
                 if let Some(window) = app.get_webview_window("main") {
@@ -80,11 +81,12 @@ pub fn run() {
             let handle = app.handle().clone();
             app.global_shortcut()
                 .on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                    // Emit to the main window without showing it — the frontend
-                    // capture flow needs the window hidden during screenshot.
-                    if let Some(window) = handle.get_webview_window("main") {
-                        let _ = window.emit("capture-toggle", ());
-                    }
+                    let handle = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = commands::start_capture_flow(&handle).await {
+                            eprintln!("Capture flow failed: {}", e);
+                        }
+                    });
                 })?;
             Ok(())
         })
@@ -105,6 +107,9 @@ pub fn run() {
             commands::hide_main_window,
             commands::show_main_window,
             commands::crop_image,
+            commands::close_overlay,
+            commands::complete_capture,
+            commands::trigger_capture,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Snaplark");

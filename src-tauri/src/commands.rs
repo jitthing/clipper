@@ -5,11 +5,17 @@ use crate::permissions;
 use crate::window;
 use base64::Engine;
 use serde::Deserialize;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Mutex;
 
 static PIN_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+#[derive(Default)]
+pub struct CaptureState {
+    pub captured_image: Mutex<Option<String>>,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct Region {
@@ -201,4 +207,101 @@ pub fn crop_image(image_data: String, region: Region) -> Result<String, String> 
         .map_err(|e| format!("Failed to encode cropped image: {}", e))?;
 
     Ok(base64::engine::general_purpose::STANDARD.encode(buf.into_inner()))
+}
+
+#[tauri::command]
+pub async fn close_overlay(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("capture-overlay") {
+        window
+            .close()
+            .map_err(|e| format!("Failed to close overlay: {e}"))
+    } else {
+        Ok(())
+    }
+}
+
+#[tauri::command]
+pub async fn complete_capture(app: AppHandle, image_data: String) -> Result<(), String> {
+    // Store the image
+    let state = app.state::<CaptureState>();
+    *state.captured_image.lock().unwrap() = Some(image_data.clone());
+
+    // Show main window
+    if let Some(main_win) = app.get_webview_window("main") {
+        let _ = main_win.show();
+        let _ = main_win.set_focus();
+        let _ = main_win.emit("capture-complete", &image_data);
+    }
+
+    // Close overlay
+    if let Some(overlay) = app.get_webview_window("capture-overlay") {
+        let _ = overlay.close();
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn trigger_capture(app: AppHandle) -> Result<(), String> {
+    // Hide main window first
+    if let Some(main_win) = app.get_webview_window("main") {
+        let _ = main_win.hide();
+    }
+    start_capture_flow(&app).await
+}
+
+pub async fn start_capture_flow(app: &AppHandle) -> Result<(), String> {
+    // 1. Hide main window if visible (so it doesn't appear in screenshot)
+    if let Some(main_win) = app.get_webview_window("main") {
+        let _ = main_win.hide();
+    }
+
+    // Small delay to ensure window is hidden
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+    // 2. Capture full screen
+    let png_bytes =
+        capture::capture_full_screen().map_err(|e| format!("Screen capture failed: {e}"))?;
+    let base64_data = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+
+    // 3. Check if overlay window already exists, close it
+    if let Some(existing) = app.get_webview_window("capture-overlay") {
+        let _ = existing.close();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    // 4. Get screen dimensions
+    let (screen_w, screen_h) = capture::screen_size();
+
+    // 5. Create fullscreen overlay window
+    let overlay = WebviewWindowBuilder::new(
+        app,
+        "capture-overlay",
+        WebviewUrl::App("index.html?mode=overlay".into()),
+    )
+    .title("")
+    .inner_size(screen_w, screen_h)
+    .position(0.0, 0.0)
+    .decorations(false)
+    .always_on_top(true)
+    .resizable(false)
+    .skip_taskbar(true)
+    .shadow(false)
+    .build()
+    .map_err(|e| format!("Failed to create overlay: {e}"))?;
+
+    // 6. Send screenshot data to overlay once it's ready
+    let js = format!(
+        "window.__SCREENSHOT_DATA__ = 'data:image/png;base64,{}'; window.dispatchEvent(new Event('screenshot-ready'));",
+        base64_data
+    );
+    // Retry sending data (window might need time to load)
+    for _ in 0..10 {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        if overlay.eval(&js).is_ok() {
+            break;
+        }
+    }
+
+    Ok(())
 }

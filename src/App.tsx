@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow, LogicalSize, LogicalPosition } from "@tauri-apps/api/window";
 import { CaptureOverlay } from "./components/CaptureOverlay";
 import { FloatingToolbar } from "./components/FloatingToolbar";
 import { PinWindow } from "./components/PinWindow";
@@ -42,19 +41,17 @@ function App() {
   const clearAnnotations = useCaptureStore((s) => s.clearAnnotations);
 
   const [isPinWindow, setIsPinWindow] = useState(false);
+  const [isOverlay, setIsOverlay] = useState(false);
+  const [overlayScreenshot, setOverlayScreenshot] = useState<string | null>(null);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus | null>(null);
-  const [fullScreenshot, setFullScreenshot] = useState<string | null>(null);
   const [isCopying, setIsCopying] = useState(false);
   const [isCopySuccess, setIsCopySuccess] = useState(false);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [ocrResult, setOcrResult] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const savedWindowStateRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-  const modeRef = useRef(mode);
-  modeRef.current = mode;
   const hasScreenPermission = permissionStatus?.screen_recording_granted ?? false;
 
   const showToast = useCallback((message: string, variant: "success" | "error" = "success") => {
@@ -86,65 +83,23 @@ function App() {
     }
   }, []);
 
-  const restoreWindow = useCallback(async () => {
-    const win = getCurrentWindow();
-    await win.setAlwaysOnTop(false);
-    await win.setResizable(true);
-    await win.setDecorations(true);
-    const saved = savedWindowStateRef.current;
-    if (saved) {
-      await win.setSize(new LogicalSize(saved.width, saved.height));
-      await win.setPosition(new LogicalPosition(saved.x, saved.y));
+  // Detect overlay mode from query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "overlay") {
+      setIsOverlay(true);
+      // Check if data is already available
+      if ((window as any).__SCREENSHOT_DATA__) {
+        setOverlayScreenshot((window as any).__SCREENSHOT_DATA__);
+      }
+      // Listen for data from Rust eval()
+      const handler = () => {
+        setOverlayScreenshot((window as any).__SCREENSHOT_DATA__);
+      };
+      window.addEventListener("screenshot-ready", handler);
+      return () => window.removeEventListener("screenshot-ready", handler);
     }
-    setFullScreenshot(null);
   }, []);
-
-  const startCaptureIfAllowed = useCallback(async () => {
-    const status = await refreshPermissions();
-    if (!status?.screen_recording_granted) {
-      setMode("idle");
-      return false;
-    }
-
-    // Save current window state
-    const win = getCurrentWindow();
-    const pos = await win.outerPosition();
-    const size = await win.outerSize();
-    const scaleFactor = await win.scaleFactor();
-    savedWindowStateRef.current = {
-      x: pos.x / scaleFactor,
-      y: pos.y / scaleFactor,
-      width: size.width / scaleFactor,
-      height: size.height / scaleFactor,
-    };
-
-    // Hide window, capture desktop, then show fullscreen overlay
-    await invoke("hide_main_window");
-    await new Promise((r) => setTimeout(r, 200));
-
-    try {
-      const base64 = await invoke<string>("capture_screen");
-      setFullScreenshot(`data:image/png;base64,${base64}`);
-
-      // Setup window as fullscreen overlay
-      const screenW = window.screen.width;
-      const screenH = window.screen.height;
-      await win.setDecorations(false);
-      await win.setResizable(false);
-      await win.setAlwaysOnTop(true);
-      await win.setPosition(new LogicalPosition(0, 0));
-      await win.setSize(new LogicalSize(screenW, screenH));
-
-      await invoke("show_main_window");
-      setMode("capturing");
-    } catch (err) {
-      console.error("Capture failed:", err);
-      await invoke("show_main_window");
-      setMode("idle");
-    }
-
-    return true;
-  }, [refreshPermissions, setMode]);
 
   // Detect if this window instance is a pin window
   useEffect(() => {
@@ -158,47 +113,17 @@ function App() {
     return () => window.removeEventListener("pin-data-ready", checkPin);
   }, []);
 
-  // Load permission status on startup
+  // Load permission status on startup (only for main window)
   useEffect(() => {
-    refreshPermissions();
-  }, [refreshPermissions]);
-
-  // Stable refs for callbacks used in the event listener
-  const startCaptureRef = useRef(startCaptureIfAllowed);
-  startCaptureRef.current = startCaptureIfAllowed;
-  const restoreWindowRef = useRef(restoreWindow);
-  restoreWindowRef.current = restoreWindow;
-
-  // Listen for global hotkey trigger from Rust backend (register once)
-  useEffect(() => {
-    const unlistenCapture = listen("capture-toggle", async () => {
-      if (modeRef.current === "capturing") {
-        setMode("idle");
-        await restoreWindowRef.current();
-        await hideMainWindow();
-        return;
-      }
-      if (modeRef.current === "idle") {
-        await startCaptureRef.current();
-      }
-    });
-    const unlistenOpen = listen("open-main-view", () => {
-      setMode("idle");
-    });
-    return () => {
-      unlistenCapture.then((f) => f());
-      unlistenOpen.then((f) => f());
-    };
-  }, [setMode, hideMainWindow]);
+    if (!isOverlay) {
+      refreshPermissions();
+    }
+  }, [refreshPermissions, isOverlay]);
 
   const handleCapture = useCallback(
     async (imageData: string) => {
       setCapturedImage(imageData);
       clearAnnotations();
-      setFullScreenshot(null);
-
-      // Restore window before showing annotation view
-      await restoreWindow();
 
       const img = new Image();
       img.onload = () => {
@@ -217,8 +142,41 @@ function App() {
       };
       img.src = imageData;
     },
-    [setCapturedImage, setMode, clearAnnotations, restoreWindow]
+    [setCapturedImage, setMode, clearAnnotations]
   );
+
+  // Listen for capture-complete event from Rust (main window only)
+  useEffect(() => {
+    if (isOverlay) return;
+    const unlisten = listen<string>("capture-complete", (event) => {
+      handleCapture(event.payload);
+    });
+    const unlistenOpen = listen("open-main-view", () => {
+      setMode("idle");
+    });
+    return () => {
+      unlisten.then((f) => f());
+      unlistenOpen.then((f) => f());
+    };
+  }, [isOverlay, handleCapture, setMode]);
+
+  // Overlay: handle capture result — send to Rust and close
+  const handleOverlayCapture = useCallback(async (imageData: string) => {
+    try {
+      await invoke("complete_capture", { imageData });
+    } catch (err) {
+      console.error("complete_capture failed:", err);
+    }
+  }, []);
+
+  // Overlay: handle cancel
+  const handleOverlayCancel = useCallback(async () => {
+    try {
+      await invoke("close_overlay");
+    } catch (err) {
+      console.error("close_overlay failed:", err);
+    }
+  }, []);
 
   const handleDemoCapture = useCallback(() => {
     // Demo mode: generate a gradient image for testing without Tauri backend
@@ -368,6 +326,24 @@ function App() {
     return <PinWindow />;
   }
 
+  // Overlay mode — only render the capture overlay
+  if (isOverlay) {
+    if (!overlayScreenshot) {
+      return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+          <div className="text-white text-lg">Preparing capture...</div>
+        </div>
+      );
+    }
+    return (
+      <CaptureOverlay
+        screenshotData={overlayScreenshot}
+        onCapture={handleOverlayCapture}
+        onCancel={handleOverlayCancel}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-transparent">
       {mode === "idle" && (
@@ -400,7 +376,7 @@ function App() {
               <div className="flex justify-center gap-3">
                 <button
                   onClick={() => {
-                    startCaptureIfAllowed();
+                    invoke("trigger_capture");
                   }}
                   className="rounded-lg bg-blue-500 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-600"
                 >
@@ -416,18 +392,6 @@ function App() {
             )}
           </div>
         </div>
-      )}
-
-      {mode === "capturing" && fullScreenshot && (
-        <CaptureOverlay
-          screenshotData={fullScreenshot}
-          onCapture={handleCapture}
-          onCancel={async () => {
-            setMode("idle");
-            await restoreWindow();
-            await hideMainWindow();
-          }}
-        />
       )}
 
       {mode === "annotating" && (

@@ -52,6 +52,17 @@ pub fn capture_screen() -> Result<Vec<u8>, String> {
     }
 }
 
+/// Return the main display dimensions in points.
+pub fn screen_size() -> (f64, f64) {
+    unsafe {
+        let display = CGMainDisplayID();
+        (
+            CGDisplayPixelsWide(display) as f64,
+            CGDisplayPixelsHigh(display) as f64,
+        )
+    }
+}
+
 /// Capture a specific region and return PNG bytes.
 pub fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<Vec<u8>, String> {
     unsafe {
