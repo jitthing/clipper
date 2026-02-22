@@ -5,6 +5,7 @@ mod clipboard;
 mod commands;
 mod hotkey;
 mod image_processing;
+mod ocr;
 mod permissions;
 mod window;
 
@@ -93,6 +94,7 @@ pub fn run() {
             commands::capture_screen,
             commands::capture_region,
             commands::copy_to_clipboard,
+            commands::ocr_image,
             commands::save_to_file,
             commands::list_windows,
             commands::pin_screenshot,
