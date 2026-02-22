@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCaptureStore, AnnotationTool } from '../stores/captureStore';
+import { ColorPicker } from './ColorPicker';
 
 const IconRectangle = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="12" height="12" rx="1"/></svg>;
 const IconCircle = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="6"/></svg>;
@@ -26,7 +27,8 @@ export function InlineCaptureToolbar({
   onSave,
   onCopy,
 }: InlineCaptureToolbarProps) {
-  const { activeTool, setActiveTool, undo, redo, annotations, undoneAnnotations } = useCaptureStore();
+  const { activeTool, setActiveTool, undo, redo, annotations, undoneAnnotations, color, setColor } = useCaptureStore();
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   const toolbarHeight = 44;
   const margin = 8;
@@ -35,7 +37,6 @@ export function InlineCaptureToolbar({
     ? region.y + region.height + margin
     : region.y - margin - toolbarHeight;
 
-  // Keep it left-aligned but bounded to viewport
   const left = Math.max(margin, Math.min(region.x, window.innerWidth - 600));
 
   const tools: { id: AnnotationTool; icon: React.ReactNode; title: string }[] = [
@@ -70,40 +71,58 @@ export function InlineCaptureToolbar({
 
       <div className="w-px h-5 bg-white/20 mx-1" />
 
-      {/* Color picker dot */}
-      <div className="w-4 h-4 rounded-full bg-red-500 cursor-pointer mx-1 border border-white/50" title="Color" />
+      {/* Color picker */}
+      <div className="relative flex items-center justify-center mx-1">
+        <button
+          onClick={() => setShowColorPicker(!showColorPicker)}
+          className="w-5 h-5 rounded-full cursor-pointer border border-white/50 hover:scale-110 transition-transform"
+          style={{ backgroundColor: color }}
+          title="Color"
+        />
+        {showColorPicker && (
+          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-900 rounded-lg shadow-xl border border-gray-700 p-1">
+            <ColorPicker
+              selected={color}
+              onSelect={(c) => {
+                setColor(c);
+                setShowColorPicker(false);
+              }}
+            />
+          </div>
+        )}
+      </div>
 
       <div className="w-px h-5 bg-white/20 mx-1" />
 
-      <button title="Scan Text (OCR)" className="px-2 py-1 text-xs font-medium hover:bg-white/20 rounded">
+      <button title="Scan Text (OCR)" className="px-2 py-1 text-xs font-medium hover:bg-white/20 rounded whitespace-nowrap">
         Scan Text
       </button>
 
       <div className="w-px h-5 bg-white/20 mx-1" />
 
       <button
-        title="Undo"
+        title="Undo (Ctrl+Z)"
         onClick={undo}
         disabled={annotations.length === 0}
-        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 disabled:opacity-50"
+        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 disabled:opacity-40"
       >
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v4h4M3 11C5 7 9 5 13 7"/></svg>
       </button>
       <button
-        title="Redo"
+        title="Redo (Ctrl+Shift+Z)"
         onClick={redo}
         disabled={undoneAnnotations.length === 0}
-        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 disabled:opacity-50"
+        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 disabled:opacity-40"
       >
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 7v4H9M13 11C11 7 7 5 3 7"/></svg>
       </button>
 
       <div className="w-px h-5 bg-white/20 mx-1" />
 
-      <button title="Save to file" onClick={onSave} className="px-2.5 py-1 text-xs font-medium hover:bg-white/20 rounded">
+      <button title="Save to file" onClick={onSave} className="px-2.5 py-1 text-xs font-medium hover:bg-white/20 rounded whitespace-nowrap">
         Save
       </button>
-      <button title="Copy to clipboard" onClick={onCopy} className="px-2.5 py-1 text-xs font-medium hover:bg-white/20 rounded">
+      <button title="Copy to clipboard" onClick={onCopy} className="px-2.5 py-1 text-xs font-medium hover:bg-white/20 rounded whitespace-nowrap">
         Copy
       </button>
 
