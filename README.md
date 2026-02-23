@@ -18,24 +18,26 @@ Built with [Tauri 2.0](https://v2.tauri.app/) — Rust backend, React + TypeScri
 | Background/menubar mode + global hotkey (`⌘⇧X`) | ✅ Done |
 | Instant capture overlay UX (`ESC` dismiss) | ✅ Done |
 | First-run permissions onboarding (Screen Recording + Accessibility status) | ✅ Done |
-| Smart window detection (window metadata via macOS window APIs) | 🚧 In Progress |
-| Annotation toolbar (arrow, rect, circle, line, text, blur, numbering) | 🚧 In Progress |
-| Color picker | 🚧 In Progress |
+| Smart window detection (window metadata via macOS window APIs) | ✅ Done |
+| Annotation toolbar (arrow, rect, circle, line, text, blur, numbering) | ✅ Done |
+| Color picker | ✅ Done |
 | Copy to clipboard (⌘C) | ✅ Done |
-| Save to file (PNG/JPG) | 🚧 In Progress |
+| Save to file (PNG/JPG) | ✅ Done |
 | Pin screenshot to screen (always-on-top, draggable, resizable) | ✅ Done |
+| OCR text recognition (macOS Vision) | ✅ Done |
 
-### Planned (v0.2+)
+### Roadmap (v0.2+)
 
 | Feature | Status |
 |---|---|
-| Scrolling capture | 📋 Planned |
-| Screen recording + webcam overlay | 📋 Planned |
-| OCR text recognition (macOS Vision) | 📋 Planned |
-| Quick share (drag to app, cloud upload) | 📋 Planned |
-| Cross-platform (Windows, Linux) | 📋 Planned |
-| Plugin system | 📋 Planned |
-| Keyboard shortcuts customization | 📋 Planned |
+| Scrolling capture (scrollshot) | 🚧 Iterating |
+| Screen recording + webcam overlay | 📋 Planned ([#29](https://github.com/jitthing/snaplark/issues/29)) |
+| Quick share (upload + copy link + retry UX) | 📋 Planned ([#30](https://github.com/jitthing/snaplark/issues/30)) |
+| Keyboard shortcuts customization | 📋 Planned ([#31](https://github.com/jitthing/snaplark/issues/31)) |
+| Plugin/extensibility system | 📋 Planned ([#32](https://github.com/jitthing/snaplark/issues/32)) |
+| Cross-platform (Windows/Linux abstraction) | 📋 Planned ([#33](https://github.com/jitthing/snaplark/issues/33)) |
+
+Tracking epic: [#28 — v0.2 roadmap](https://github.com/jitthing/snaplark/issues/28)
 
 ## Screenshots
 
