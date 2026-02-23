@@ -79,6 +79,22 @@ pub fn list_windows() -> Result<Vec<window::WindowInfo>, String> {
 }
 
 #[tauri::command]
+pub fn capture_window_frame(window_id: u32) -> Result<String, String> {
+    let target = window::list_windows()?
+        .into_iter()
+        .find(|w| w.id == window_id)
+        .ok_or_else(|| format!("Window {window_id} not found"))?;
+
+    let x = target.x.round() as i32;
+    let y = target.y.round() as i32;
+    let width = target.width.round().max(1.0) as u32;
+    let height = target.height.round().max(1.0) as u32;
+
+    let data = capture::capture_region(x, y, width, height)?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&data))
+}
+
+#[tauri::command]
 pub async fn pin_screenshot(
     app: AppHandle,
     image_data: String,
@@ -287,6 +303,7 @@ pub async fn start_capture_flow(app: &AppHandle) -> Result<(), String> {
     .resizable(false)
     .skip_taskbar(true)
     .shadow(false)
+    .visible(false)
     .build()
     .map_err(|e| format!("Failed to create overlay: {e}"))?;
 
@@ -295,12 +312,22 @@ pub async fn start_capture_flow(app: &AppHandle) -> Result<(), String> {
         "window.__SCREENSHOT_DATA__ = 'data:image/png;base64,{}'; window.dispatchEvent(new Event('screenshot-ready'));",
         base64_data
     );
+    let mut sent = false;
     // Retry sending data (window might need time to load)
     for _ in 0..10 {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         if overlay.eval(&js).is_ok() {
+            sent = true;
             break;
         }
+    }
+
+    if sent {
+        let _ = overlay.show();
+        let _ = overlay.set_focus();
+    } else {
+        let _ = overlay.close();
+        return Err("Failed to initialize capture overlay".to_string());
     }
 
     Ok(())
