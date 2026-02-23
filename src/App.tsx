@@ -329,11 +329,7 @@ function App() {
   // Overlay mode — only render the capture overlay
   if (isOverlay) {
     if (!overlayScreenshot) {
-      return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="text-white text-lg">Preparing capture...</div>
-        </div>
-      );
+      return null;
     }
     return (
       <CaptureOverlay

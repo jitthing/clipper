@@ -97,6 +97,7 @@ pub fn run() {
             commands::ocr_image,
             commands::save_to_file,
             commands::list_windows,
+            commands::capture_window_frame,
             commands::pin_screenshot,
             commands::close_pin_window,
             commands::get_permission_status,
