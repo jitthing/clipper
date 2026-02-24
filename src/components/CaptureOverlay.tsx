@@ -66,6 +66,13 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
   const [annotStartPos, setAnnotStartPos] = useState<{ x: number; y: number } | null>(null);
   const [annotCurrentPos, setAnnotCurrentPos] = useState<{ x: number; y: number } | null>(null);
   const [penPoints, setPenPoints] = useState<{ x: number; y: number }[]>([]);
+  const [textInput, setTextInput] = useState<{ x: number; y: number; visible: boolean }>({
+    x: 0,
+    y: 0,
+    visible: false,
+  });
+  const [textValue, setTextValue] = useState("");
+  const textInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch window list on mount
   useEffect(() => {
@@ -74,10 +81,18 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
       .catch(console.error);
   }, []);
 
+  useEffect(() => {
+    if (textInput.visible) {
+      setTimeout(() => textInputRef.current?.focus(), 0);
+    }
+  }, [textInput.visible]);
+
   // Initialize bgCanvasRef when region is selected
   useEffect(() => {
     if (phase !== "selected" || !selectedRegion) {
       setBgReady(false);
+      setTextInput({ x: 0, y: 0, visible: false });
+      setTextValue("");
       return;
     }
     const img = new Image();
@@ -190,6 +205,26 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     [windows]
   );
 
+  const submitTextAnnotation = useCallback(() => {
+    if (textValue.trim()) {
+      addAnnotation({
+        id: genId(),
+        tool: "text",
+        startX: textInput.x,
+        startY: textInput.y,
+        endX: textInput.x,
+        endY: textInput.y,
+        color,
+        strokeWidth,
+        text: textValue,
+        fontSize,
+      });
+    }
+
+    setTextInput({ x: 0, y: 0, visible: false });
+    setTextValue("");
+  }, [textValue, addAnnotation, textInput.x, textInput.y, color, strokeWidth, fontSize]);
+
   // --- Annotation mouse handlers ---
   const getAnnotPos = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -206,19 +241,15 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       e.stopPropagation();
 
+      if (textInput.visible) {
+        submitTextAnnotation();
+        return;
+      }
+
       if (activeTool === "text") {
         const pos = getAnnotPos(e);
-        const text = prompt("Enter text:");
-        if (text) {
-          addAnnotation({
-            id: genId(),
-            tool: "text",
-            startX: pos.x, startY: pos.y,
-            endX: pos.x, endY: pos.y,
-            color, strokeWidth,
-            text, fontSize,
-          });
-        }
+        setTextInput({ x: pos.x, y: pos.y, visible: true });
+        setTextValue("");
         return;
       }
       if (activeTool === "number") {
@@ -242,7 +273,7 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
         setPenPoints([pos]);
       }
     },
-    [activeTool, getAnnotPos, color, strokeWidth, fontSize, nextNumber, addAnnotation]
+    [activeTool, getAnnotPos, color, strokeWidth, nextNumber, addAnnotation, textInput.visible, submitTextAnnotation]
   );
 
   const handleAnnotationMouseMove = useCallback(
@@ -311,6 +342,20 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
       renderAnnotation(ctx, preview, source);
     }
   }, [annotations, phase, selectedRegion, isAnnotDrawing, annotStartPos, annotCurrentPos, activeTool, color, strokeWidth, blurSize, penPoints, bgReady]);
+
+  const handleTextInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submitTextAnnotation();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setTextInput({ x: 0, y: 0, visible: false });
+        setTextValue("");
+      }
+    },
+    [submitTextAnnotation]
+  );
 
   // --- Selection phase mouse handlers ---
   const handleMouseMove = useCallback(
@@ -527,6 +572,24 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
             onMouseMove={handleAnnotationMouseMove}
             onMouseUp={handleAnnotationMouseUp}
           />
+          {textInput.visible && (
+            <input
+              ref={textInputRef}
+              type="text"
+              value={textValue}
+              onChange={(e) => setTextValue(e.target.value)}
+              onKeyDown={handleTextInputKeyDown}
+              onBlur={submitTextAnnotation}
+              className="absolute z-[90] min-w-24 border-b-2 border-current bg-transparent outline-none"
+              style={{
+                left: selectedRegion.x + textInput.x,
+                top: selectedRegion.y + textInput.y,
+                color,
+                fontSize: `${fontSize}px`,
+                fontFamily: "sans-serif",
+              }}
+            />
+          )}
           <SelectionHandles region={selectedRegion} onMouseDownHandle={handleMouseDownHandle} />
           <InlineCaptureToolbar
             region={selectedRegion}
