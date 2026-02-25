@@ -28,6 +28,16 @@ pub fn run() {
                     let _ = window.emit("open-main-view", ());
                 }
             }
+            "toggle-recording" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.emit("toggle-recording-request", ());
+                }
+            }
+            "toggle-webcam-overlay" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.emit("toggle-webcam-overlay-request", ());
+                }
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -57,8 +67,30 @@ pub fn run() {
                 true,
                 None::<&str>,
             )?;
+            let toggle_recording_item = MenuItem::with_id(
+                &app_handle,
+                "toggle-recording",
+                "Start / Stop Recording (⌘⇧R)",
+                true,
+                None::<&str>,
+            )?;
+            let toggle_webcam_item = MenuItem::with_id(
+                &app_handle,
+                "toggle-webcam-overlay",
+                "Toggle Webcam Overlay",
+                true,
+                None::<&str>,
+            )?;
             let quit_item = MenuItem::with_id(&app_handle, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(&app_handle, &[&show_item, &quit_item])?;
+            let menu = Menu::with_items(
+                &app_handle,
+                &[
+                    &show_item,
+                    &toggle_recording_item,
+                    &toggle_webcam_item,
+                    &quit_item,
+                ],
+            )?;
 
             let tray_handle = app.handle().clone();
             TrayIconBuilder::new()
@@ -88,6 +120,20 @@ pub fn run() {
                         }
                     });
                 })?;
+
+            // Register Cmd+Shift+R global hotkey for recording toggle
+            let recording_shortcut =
+                Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyR);
+            let recording_handle = app.handle().clone();
+            app.global_shortcut().on_shortcut(
+                recording_shortcut,
+                move |_app, _shortcut, _event| {
+                    if let Some(window) = recording_handle.get_webview_window("main") {
+                        let _ = window.emit("toggle-recording-request", ());
+                    }
+                },
+            )?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
