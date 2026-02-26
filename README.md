@@ -31,7 +31,7 @@ Built with [Tauri 2.0](https://v2.tauri.app/) — Rust backend, React + TypeScri
 | Feature | Status |
 |---|---|
 | Scrolling capture (scrollshot) | 🚧 Iterating |
-| Screen recording + webcam overlay | 📋 Planned ([#29](https://github.com/jitthing/snaplark/issues/29)) |
+| Screen recording + webcam overlay | ✅ Done ([#29](https://github.com/jitthing/snaplark/issues/29), [#36](https://github.com/jitthing/snaplark/pull/36)) |
 | Quick share (upload + copy link + retry UX) | 📋 Planned ([#30](https://github.com/jitthing/snaplark/issues/30)) |
 | Keyboard shortcuts customization | 📋 Planned ([#31](https://github.com/jitthing/snaplark/issues/31)) |
 | Plugin/extensibility system | 📋 Planned ([#32](https://github.com/jitthing/snaplark/issues/32)) |
@@ -55,6 +55,21 @@ Tracking epic: [#28 — v0.2 roadmap](https://github.com/jitthing/snaplark/issue
 | Screen Capture | macOS ScreenCaptureKit |
 | Annotations | HTML Canvas API |
 | State Management | Zustand |
+
+## Install (No Rust Required)
+
+If you only want to use Snaplark, you **do not** need Rust or Node.
+
+### Option A — Download app from GitHub Releases
+
+1. Go to [Releases](https://github.com/jitthing/snaplark/releases)
+2. Download the latest macOS `.dmg`
+3. Open the DMG and drag **Snaplark.app** to Applications
+
+### Option B — Homebrew (planned)
+
+Homebrew Cask support is planned so users can install with a single command.
+Until then, use the DMG from Releases.
 
 ## Getting Started
 
@@ -115,6 +130,11 @@ npm run tauri build
 #   macOS app:  src-tauri/target/release/bundle/macos/Snaplark.app
 #   DMG:        src-tauri/target/release/bundle/dmg/Snaplark_0.1.0_aarch64.dmg
 ```
+
+### CI Distribution Pipelines
+
+- `release.yml` publishes GitHub Release app bundles on version tags (`v*`).
+- The same workflow also builds macOS preview artifacts on every PR, so testers can download and run Snaplark without local Rust setup.
 
 ### Project Structure
 

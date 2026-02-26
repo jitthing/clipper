@@ -29,6 +29,16 @@ function formatSaveTimestamp(date: Date): string {
   );
 }
 
+function formatRecordingDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const secs = Math.floor(seconds % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${mins}:${secs}`;
+}
+
 function App() {
   const mode = useCaptureStore((s) => s.mode);
   const setMode = useCaptureStore((s) => s.setMode);
@@ -51,7 +61,21 @@ function App() {
   const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [ocrResult, setOcrResult] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isStartingRecording, setIsStartingRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [webcamOverlayEnabled, setWebcamOverlayEnabled] = useState(false);
+
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const displayStreamRef = useRef<MediaStream | null>(null);
+  const webcamStreamRef = useRef<MediaStream | null>(null);
+  const renderLoopRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const recordingStartTimeRef = useRef<number>(0);
+  const isRecordingRef = useRef(false);
+  const webcamOverlayEnabledRef = useRef(false);
+
   const hasScreenPermission = permissionStatus?.screen_recording_granted ?? false;
 
   const showToast = useCallback((message: string, variant: "success" | "error" = "success") => {
@@ -63,6 +87,14 @@ function App() {
     const timeout = window.setTimeout(() => setToast(null), 2000);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
+  useEffect(() => {
+    webcamOverlayEnabledRef.current = webcamOverlayEnabled;
+  }, [webcamOverlayEnabled]);
 
   const refreshPermissions = useCallback(async () => {
     try {
@@ -148,14 +180,15 @@ function App() {
   // Listen for capture-complete event from Rust (main window only)
   useEffect(() => {
     if (isOverlay) return;
-    const unlisten = listen<string>("capture-complete", (event) => {
+    const unlistenCapture = listen<string>("capture-complete", (event) => {
       handleCapture(event.payload);
     });
     const unlistenOpen = listen("open-main-view", () => {
       setMode("idle");
     });
+
     return () => {
-      unlisten.then((f) => f());
+      unlistenCapture.then((f) => f());
       unlistenOpen.then((f) => f());
     };
   }, [isOverlay, handleCapture, setMode]);
@@ -198,6 +231,210 @@ function App() {
     ctx.fillText("Demo Screenshot - Draw annotations!", 150, 420);
     handleCapture(canvas.toDataURL());
   }, [handleCapture]);
+
+  const saveRecordingBlob = useCallback((blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `snaplark-recording-${formatSaveTimestamp(new Date())}.webm`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, []);
+
+  const cleanupRecordingResources = useCallback(() => {
+    if (renderLoopRef.current !== null) {
+      cancelAnimationFrame(renderLoopRef.current);
+      renderLoopRef.current = null;
+    }
+
+    if (timerRef.current !== null) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    displayStreamRef.current?.getTracks().forEach((track) => track.stop());
+    webcamStreamRef.current?.getTracks().forEach((track) => track.stop());
+
+    displayStreamRef.current = null;
+    webcamStreamRef.current = null;
+    mediaRecorderRef.current = null;
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+
+    if (recorder.state !== "inactive") {
+      recorder.stop();
+    }
+
+    setIsRecording(false);
+    setRecordingSeconds(0);
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    if (isStartingRecording || isRecordingRef.current) return;
+
+    setIsStartingRecording(true);
+
+    try {
+      await invoke("show_main_window");
+
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: 30,
+        },
+        audio: true,
+      });
+      displayStreamRef.current = displayStream;
+
+      let webcamStream: MediaStream | null = null;
+      if (webcamOverlayEnabledRef.current) {
+        try {
+          webcamStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 360 },
+            audio: false,
+          });
+          webcamStreamRef.current = webcamStream;
+        } catch (error) {
+          console.warn("Webcam unavailable, continuing without overlay", error);
+          setWebcamOverlayEnabled(false);
+          showToast("Webcam unavailable — recording screen only", "error");
+        }
+      }
+
+      const displayVideo = document.createElement("video");
+      displayVideo.srcObject = displayStream;
+      displayVideo.muted = true;
+      await displayVideo.play();
+
+      let outputStream: MediaStream;
+
+      if (webcamStream && webcamStream.getVideoTracks().length > 0) {
+        const webcamVideo = document.createElement("video");
+        webcamVideo.srcObject = webcamStream;
+        webcamVideo.muted = true;
+        await webcamVideo.play();
+
+        const canvas = document.createElement("canvas");
+        canvas.width = displayVideo.videoWidth || 1920;
+        canvas.height = displayVideo.videoHeight || 1080;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Failed to initialize recording canvas");
+
+        const draw = () => {
+          ctx.drawImage(displayVideo, 0, 0, canvas.width, canvas.height);
+
+          const bubbleSize = Math.round(Math.min(canvas.width, canvas.height) * 0.2);
+          const margin = 24;
+          const x = canvas.width - bubbleSize - margin;
+          const y = canvas.height - bubbleSize - margin;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(x + bubbleSize / 2, y + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(webcamVideo, x, y, bubbleSize, bubbleSize);
+          ctx.restore();
+
+          ctx.strokeStyle = "rgba(255,255,255,0.9)";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(x + bubbleSize / 2, y + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
+          ctx.stroke();
+
+          renderLoopRef.current = requestAnimationFrame(draw);
+        };
+
+        draw();
+        outputStream = canvas.captureStream(30);
+      } else {
+        outputStream = displayStream;
+      }
+
+      displayStream
+        .getAudioTracks()
+        .forEach((audioTrack) => outputStream.addTrack(audioTrack.clone()));
+
+      const chunks: BlobPart[] = [];
+      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+        ? "video/webm;codecs=vp9,opus"
+        : "video/webm";
+
+      const recorder = new MediaRecorder(outputStream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        cleanupRecordingResources();
+        if (chunks.length > 0) {
+          saveRecordingBlob(new Blob(chunks, { type: "video/webm" }));
+          showToast("Recording saved to Downloads");
+        }
+      };
+
+      recorder.start(1000);
+      setIsRecording(true);
+      recordingStartTimeRef.current = Date.now();
+      timerRef.current = window.setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
+        setRecordingSeconds(elapsed);
+      }, 1000);
+
+      const [displayTrack] = displayStream.getVideoTracks();
+      if (displayTrack) {
+        displayTrack.onended = () => {
+          if (isRecordingRef.current) {
+            stopRecording();
+          }
+        };
+      }
+
+      showToast("Recording started");
+    } catch (err) {
+      console.error("Failed to start recording:", err);
+      showToast(
+        "Unable to start recording. Grant Screen Recording permission in System Settings.",
+        "error"
+      );
+    } finally {
+      setIsStartingRecording(false);
+    }
+  }, [cleanupRecordingResources, isStartingRecording, saveRecordingBlob, showToast, stopRecording]);
+
+  const toggleRecording = useCallback(() => {
+    if (isRecordingRef.current) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [startRecording, stopRecording]);
+
+  useEffect(() => {
+    if (isOverlay) return;
+
+    const unlistenRecordingToggle = listen("toggle-recording-request", () => {
+      toggleRecording();
+    });
+    const unlistenWebcamToggle = listen("toggle-webcam-overlay-request", () => {
+      setWebcamOverlayEnabled((prev) => {
+        const next = !prev;
+        showToast(`Webcam overlay ${next ? "enabled" : "disabled"}`);
+        return next;
+      });
+    });
+
+    return () => {
+      unlistenRecordingToggle.then((f) => f());
+      unlistenWebcamToggle.then((f) => f());
+    };
+  }, [isOverlay, showToast, toggleRecording]);
 
   const handleCopy = useCallback(async () => {
     if (!bgCanvasRef.current || isCopying) return;
@@ -299,6 +536,12 @@ function App() {
     }
   }, [ocrResult, showToast]);
 
+  useEffect(() => {
+    return () => {
+      cleanupRecordingResources();
+    };
+  }, [cleanupRecordingResources]);
+
   // Keyboard shortcuts for undo/redo/escape/OCR
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -369,21 +612,65 @@ function App() {
                 onRefresh={refreshPermissions}
               />
             ) : (
-              <div className="flex justify-center gap-3">
-                <button
-                  onClick={() => {
-                    invoke("trigger_capture");
-                  }}
-                  className="rounded-lg bg-blue-500 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-600"
-                >
-                  Start Capture
-                </button>
-                <button
-                  onClick={handleDemoCapture}
-                  className="rounded-lg bg-gray-200 px-6 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-300"
-                >
-                  Demo Mode
-                </button>
+              <div className="space-y-4">
+                <div className="flex justify-center gap-3">
+                  <button
+                    onClick={() => {
+                      invoke("trigger_capture");
+                    }}
+                    className="rounded-lg bg-blue-500 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-600"
+                  >
+                    Start Capture
+                  </button>
+                  <button
+                    onClick={handleDemoCapture}
+                    className="rounded-lg bg-gray-200 px-6 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-300"
+                  >
+                    Demo Mode
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-left">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="font-semibold text-gray-900">Screen Recording (MVP)</p>
+                    {isRecording && (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+                        <span className="h-2 w-2 rounded-full bg-red-500" />
+                        REC {formatRecordingDuration(recordingSeconds)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mb-3 text-sm text-gray-600">
+                    Tray shortcut: <kbd className="rounded bg-white px-2 py-1 font-mono">⌘⇧R</kbd>
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={toggleRecording}
+                      disabled={isStartingRecording}
+                      className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors ${
+                        isRecording
+                          ? "bg-red-500 hover:bg-red-600"
+                          : "bg-emerald-500 hover:bg-emerald-600"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      {isRecording
+                        ? "Stop Recording"
+                        : isStartingRecording
+                          ? "Starting..."
+                          : "Start Recording"}
+                    </button>
+
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={webcamOverlayEnabled}
+                        onChange={(e) => setWebcamOverlayEnabled(e.target.checked)}
+                        disabled={isRecording}
+                      />
+                      Webcam bubble overlay
+                    </label>
+                  </div>
+                </div>
               </div>
             )}
           </div>
