@@ -108,7 +108,7 @@ pub fn run() {
                 });
             }
 
-            let capture_shortcut = hotkey::bootstrap_capture_shortcut(&app.handle())?;
+            let capture_shortcut = hotkey::bootstrap_capture_shortcut(app.handle())?;
             app.manage(hotkey::HotkeyState::new(capture_shortcut));
 
             // Register Cmd+Shift+R global hotkey for recording toggle
