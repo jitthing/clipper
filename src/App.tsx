@@ -21,6 +21,12 @@ interface ToastState {
   variant: "success" | "error";
 }
 
+interface HotkeyMutationResult {
+  status: "ok" | "invalid" | "conflict";
+  message: string;
+  shortcut: string;
+}
+
 function formatSaveTimestamp(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   return (
@@ -37,6 +43,36 @@ function formatRecordingDuration(seconds: number): string {
     .toString()
     .padStart(2, "0");
   return `${mins}:${secs}`;
+}
+
+function formatShortcutForDisplay(shortcut: string): string {
+  return shortcut
+    .replace(/CommandOrControl/g, "⌘/Ctrl")
+    .replace(/Shift/g, "⇧")
+    .replace(/Alt/g, "⌥");
+}
+
+function shortcutFromKeyboardEvent(event: KeyboardEvent): string | null {
+  const key = event.key.toUpperCase();
+  if (["SHIFT", "CONTROL", "META", "ALT"].includes(key)) {
+    return null;
+  }
+  if (!/^[A-Z]$/.test(key)) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (event.metaKey || event.ctrlKey) {
+    parts.push("CommandOrControl");
+  }
+  if (event.altKey) {
+    parts.push("Alt");
+  }
+  if (event.shiftKey) {
+    parts.push("Shift");
+  }
+  parts.push(key);
+  return parts.join("+");
 }
 
 function App() {
@@ -65,6 +101,13 @@ function App() {
   const [isStartingRecording, setIsStartingRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [webcamOverlayEnabled, setWebcamOverlayEnabled] = useState(false);
+  const [captureShortcut, setCaptureShortcut] = useState("CommandOrControl+Shift+X");
+  const [pendingCaptureShortcut, setPendingCaptureShortcut] = useState("CommandOrControl+Shift+X");
+  const [isListeningForShortcut, setIsListeningForShortcut] = useState(false);
+  const [shortcutStatus, setShortcutStatus] = useState<{
+    variant: "success" | "error";
+    message: string;
+  } | null>(null);
 
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -104,6 +147,16 @@ function App() {
     } catch (err) {
       console.error("Failed to read permission status:", err);
       return null;
+    }
+  }, []);
+
+  const loadCaptureShortcut = useCallback(async () => {
+    try {
+      const shortcut = await invoke<string>("get_capture_shortcut");
+      setCaptureShortcut(shortcut);
+      setPendingCaptureShortcut(shortcut);
+    } catch (err) {
+      console.error("Failed to load capture shortcut:", err);
     }
   }, []);
 
@@ -149,8 +202,9 @@ function App() {
   useEffect(() => {
     if (!isOverlay) {
       refreshPermissions();
+      loadCaptureShortcut();
     }
-  }, [refreshPermissions, isOverlay]);
+  }, [refreshPermissions, loadCaptureShortcut, isOverlay]);
 
   const handleCapture = useCallback(
     async (imageData: string) => {
@@ -542,9 +596,31 @@ function App() {
     };
   }, [cleanupRecordingResources]);
 
+  useEffect(() => {
+    if (!isListeningForShortcut) return;
+    const handleShortcutCapture = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const shortcut = shortcutFromKeyboardEvent(event);
+      if (!shortcut) {
+        setShortcutStatus({
+          variant: "error",
+          message: "Use Command/Ctrl + modifier + A-Z key.",
+        });
+        return;
+      }
+      setPendingCaptureShortcut(shortcut);
+      setShortcutStatus(null);
+      setIsListeningForShortcut(false);
+    };
+    window.addEventListener("keydown", handleShortcutCapture, true);
+    return () => window.removeEventListener("keydown", handleShortcutCapture, true);
+  }, [isListeningForShortcut]);
+
   // Keyboard shortcuts for undo/redo/escape/OCR
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isListeningForShortcut) return;
       if (mode !== "annotating") return;
       if (e.key === "z" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
         e.preventDefault();
@@ -562,7 +638,7 @@ function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mode, undo, redo, handleOcr, setMode, hideMainWindow]);
+  }, [mode, undo, redo, handleOcr, setMode, hideMainWindow, isListeningForShortcut]);
 
   // Early return for pin windows - must be after all hooks
   if (isPinWindow) {
@@ -670,6 +746,96 @@ function App() {
                       Webcam bubble overlay
                     </label>
                   </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-left">
+                  <p className="text-sm font-semibold text-gray-900">Capture Shortcut</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Current:{" "}
+                    <kbd className="rounded bg-white px-2 py-1 font-mono text-xs">
+                      {formatShortcutForDisplay(captureShortcut)}
+                    </kbd>
+                  </p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    New:{" "}
+                    <kbd className="rounded bg-white px-2 py-1 font-mono text-xs">
+                      {formatShortcutForDisplay(pendingCaptureShortcut)}
+                    </kbd>
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setShortcutStatus(null);
+                        setIsListeningForShortcut(true);
+                      }}
+                      className="rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-300"
+                    >
+                      {isListeningForShortcut ? "Press keys..." : "Record Shortcut"}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setShortcutStatus(null);
+                        try {
+                          const result = await invoke<HotkeyMutationResult>("set_capture_shortcut", {
+                            shortcut: pendingCaptureShortcut,
+                          });
+                          setCaptureShortcut(result.shortcut);
+                          setPendingCaptureShortcut(result.shortcut);
+                          setShortcutStatus({
+                            variant: result.status === "ok" ? "success" : "error",
+                            message: result.message,
+                          });
+                        } catch (err) {
+                          console.error("Failed to set capture shortcut:", err);
+                          setShortcutStatus({
+                            variant: "error",
+                            message: "Failed to update shortcut.",
+                          });
+                        }
+                      }}
+                      className="rounded-lg bg-blue-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setShortcutStatus(null);
+                        try {
+                          const result =
+                            await invoke<HotkeyMutationResult>("reset_capture_shortcut");
+                          setCaptureShortcut(result.shortcut);
+                          setPendingCaptureShortcut(result.shortcut);
+                          setShortcutStatus({
+                            variant: result.status === "ok" ? "success" : "error",
+                            message: result.message,
+                          });
+                        } catch (err) {
+                          console.error("Failed to reset capture shortcut:", err);
+                          setShortcutStatus({
+                            variant: "error",
+                            message: "Failed to reset shortcut.",
+                          });
+                        }
+                      }}
+                      className="rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-300"
+                    >
+                      Reset Default
+                    </button>
+                  </div>
+                  {shortcutStatus && (
+                    <p
+                      className={`mt-2 text-xs ${
+                        shortcutStatus.variant === "success" ? "text-emerald-700" : "text-red-600"
+                      }`}
+                    >
+                      {shortcutStatus.message}
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs text-gray-500">
+                    Requires Command/Ctrl + Shift/Alt + A-Z. Recording shortcut (
+                    {formatShortcutForDisplay("CommandOrControl+Shift+R")}) is reserved.
+                  </p>
                 </div>
               </div>
             )}

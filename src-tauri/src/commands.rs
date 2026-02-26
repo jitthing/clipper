@@ -1,10 +1,12 @@
 use crate::capture;
 use crate::clipboard;
+use crate::hotkey;
 use crate::ocr;
 use crate::permissions;
 use crate::window;
 use base64::Engine;
 use serde::Deserialize;
+use tauri::State;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -264,6 +266,28 @@ pub async fn trigger_capture(app: AppHandle) -> Result<(), String> {
         let _ = main_win.hide();
     }
     start_capture_flow(&app).await
+}
+
+#[tauri::command]
+pub fn get_capture_shortcut(state: State<hotkey::HotkeyState>) -> String {
+    hotkey::get_capture_shortcut(&state)
+}
+
+#[tauri::command]
+pub fn set_capture_shortcut(
+    app: AppHandle,
+    state: State<hotkey::HotkeyState>,
+    shortcut: String,
+) -> Result<hotkey::HotkeyMutationResult, String> {
+    hotkey::update_capture_shortcut(&app, &state, &shortcut)
+}
+
+#[tauri::command]
+pub fn reset_capture_shortcut(
+    app: AppHandle,
+    state: State<hotkey::HotkeyState>,
+) -> Result<hotkey::HotkeyMutationResult, String> {
+    hotkey::reset_capture_shortcut(&app, &state)
 }
 
 pub async fn start_capture_flow(app: &AppHandle) -> Result<(), String> {
