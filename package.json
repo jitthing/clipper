@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "rm -rf .tmp-tests && tsc -p tsconfig.test.json && node tests/captureGeometry.test.mjs && rm -rf .tmp-tests",
+    "lint": "tsc --noEmit",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"

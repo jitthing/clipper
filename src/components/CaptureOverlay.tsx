@@ -5,18 +5,18 @@ import { SelectionHandles } from "./SelectionHandles";
 import { InlineCaptureToolbar } from "./InlineCaptureToolbar";
 import { useCaptureStore, genId, type Annotation } from "../stores/captureStore";
 import { renderAllAnnotations, renderAnnotation } from "../utils/canvas";
+import {
+  clampPointToViewport,
+  clampRegionToViewport,
+  mapRegionToImagePixels,
+  type Region,
+  type Size,
+} from "../utils/captureGeometry";
 
 interface WindowInfo {
   id: number;
   title: string;
   app_name: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface Region {
   x: number;
   y: number;
   width: number;
@@ -43,7 +43,10 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [dragCurrent, setDragCurrent] = useState<{ x: number; y: number } | null>(null);
+  const [viewportSize, setViewportSize] = useState<Size>({ width: window.innerWidth, height: window.innerHeight });
+  const [screenshotSize, setScreenshotSize] = useState<Size | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const screenshotImageRef = useRef<HTMLImageElement | null>(null);
 
   // Annotation canvas state
   const annotationCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -87,6 +90,23 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     }
   }, [textInput.visible]);
 
+  useEffect(() => {
+    const updateViewport = () => {
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      screenshotImageRef.current = img;
+      setScreenshotSize({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.src = screenshotData;
+  }, [screenshotData]);
+
   // Initialize bgCanvasRef when region is selected
   useEffect(() => {
     if (phase !== "selected" || !selectedRegion) {
@@ -95,38 +115,69 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
       setTextValue("");
       return;
     }
-    const img = new Image();
-    img.onload = () => {
+    const img = screenshotImageRef.current ?? new Image();
+    const loadAndPrepare = () => {
+      const imageRegion = screenshotSize
+        ? mapRegionToImagePixels(selectedRegion, viewportSize, screenshotSize)
+        : selectedRegion;
       const canvas = document.createElement("canvas");
       canvas.width = selectedRegion.width;
       canvas.height = selectedRegion.height;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(
         img,
-        selectedRegion.x, selectedRegion.y, selectedRegion.width, selectedRegion.height,
+        imageRegion.x, imageRegion.y, imageRegion.width, imageRegion.height,
         0, 0, selectedRegion.width, selectedRegion.height
       );
       bgCanvasRef.current = canvas;
       setBgReady(true);
     };
+
+    if (img.complete && img.naturalWidth > 0) {
+      loadAndPrepare();
+      return;
+    }
+
+    img.onload = loadAndPrepare;
     img.src = screenshotData;
-  }, [phase, selectedRegion, screenshotData]);
+  }, [phase, selectedRegion, screenshotData, screenshotSize, viewportSize]);
 
   const exportWithAnnotations = useCallback(() => {
     const region = selectedRegion!;
+    const imageRegion = screenshotSize
+      ? mapRegionToImagePixels(region, viewportSize, screenshotSize)
+      : region;
+
     const offscreen = document.createElement("canvas");
-    offscreen.width = region.width;
-    offscreen.height = region.height;
+    offscreen.width = imageRegion.width;
+    offscreen.height = imageRegion.height;
     const ctx = offscreen.getContext("2d")!;
 
-    if (bgCanvasRef.current) {
-      ctx.drawImage(bgCanvasRef.current, 0, 0);
+    if (screenshotImageRef.current) {
+      ctx.drawImage(
+        screenshotImageRef.current,
+        imageRegion.x,
+        imageRegion.y,
+        imageRegion.width,
+        imageRegion.height,
+        0,
+        0,
+        imageRegion.width,
+        imageRegion.height
+      );
+    } else if (bgCanvasRef.current) {
+      ctx.drawImage(bgCanvasRef.current, 0, 0, imageRegion.width, imageRegion.height);
     }
 
+    const scaleX = imageRegion.width / region.width;
+    const scaleY = imageRegion.height / region.height;
+    ctx.save();
+    ctx.scale(scaleX, scaleY);
     renderAllAnnotations(ctx, annotations, bgCanvasRef.current || undefined);
+    ctx.restore();
 
     return offscreen.toDataURL("image/png");
-  }, [selectedRegion, annotations]);
+  }, [selectedRegion, annotations, screenshotSize, viewportSize]);
 
   const handleConfirm = useCallback(() => {
     const dataUrl = exportWithAnnotations();
@@ -187,13 +238,29 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     overlayRef.current?.focus();
   }, []);
 
+  const clampRegion = useCallback(
+    (region: Region) => clampRegionToViewport(region, viewportSize, 10),
+    [viewportSize]
+  );
+
   const findWindowAt = useCallback(
     (x: number, y: number): WindowInfo | null => {
       let best: WindowInfo | null = null;
       let bestArea = Infinity;
       for (const w of windows) {
-        if (x >= w.x && x <= w.x + w.width && y >= w.y && y <= w.y + w.height) {
-          const area = w.width * w.height;
+        const clamped = clampRegion({
+          x: w.x,
+          y: w.y,
+          width: w.width,
+          height: w.height,
+        });
+        if (
+          x >= clamped.x &&
+          x <= clamped.x + clamped.width &&
+          y >= clamped.y &&
+          y <= clamped.y + clamped.height
+        ) {
+          const area = clamped.width * clamped.height;
           if (area < bestArea) {
             bestArea = area;
             best = w;
@@ -202,7 +269,7 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
       }
       return best;
     },
-    [windows]
+    [windows, clampRegion]
   );
 
   const submitTextAnnotation = useCallback(() => {
@@ -360,9 +427,11 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
   // --- Selection phase mouse handlers ---
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      const clampedPoint = clampPointToViewport({ x: e.clientX, y: e.clientY }, viewportSize);
+
       if (phase === "selected" && resizeHandle && initialRegion && resizeDragStart) {
-        const dx = e.clientX - resizeDragStart.x;
-        const dy = e.clientY - resizeDragStart.y;
+        const dx = clampedPoint.x - resizeDragStart.x;
+        const dy = clampedPoint.y - resizeDragStart.y;
         let { x, y, width, height } = initialRegion;
 
         if (resizeHandle.includes("w")) { x += dx; width -= dx; }
@@ -373,64 +442,65 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
         if (width < 0) { x += width; width = Math.abs(width); }
         if (height < 0) { y += height; height = Math.abs(height); }
 
-        setSelectedRegion({
+        setSelectedRegion(clampRegion({
           x: Math.round(x), y: Math.round(y),
           width: Math.max(10, Math.round(width)),
           height: Math.max(10, Math.round(height)),
-        });
+        }));
         return;
       }
 
       if (phase === "selected") return;
 
       if (dragStart) {
-        const dx = Math.abs(e.clientX - dragStart.x);
-        const dy = Math.abs(e.clientY - dragStart.y);
+        const dx = Math.abs(clampedPoint.x - dragStart.x);
+        const dy = Math.abs(clampedPoint.y - dragStart.y);
         if (!isDragging && (dx > 3 || dy > 3)) {
           setIsDragging(true);
           setHoveredWindow(null);
         }
         if (isDragging || dx > 3 || dy > 3) {
-          setDragCurrent({ x: e.clientX, y: e.clientY });
+          setDragCurrent(clampedPoint);
         }
       } else {
-        setHoveredWindow(findWindowAt(e.clientX, e.clientY));
+        setHoveredWindow(findWindowAt(clampedPoint.x, clampedPoint.y));
       }
     },
-    [phase, resizeHandle, initialRegion, resizeDragStart, dragStart, isDragging, findWindowAt]
+    [phase, resizeHandle, initialRegion, resizeDragStart, dragStart, isDragging, findWindowAt, viewportSize, clampRegion]
   );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      const clampedPoint = clampPointToViewport({ x: e.clientX, y: e.clientY }, viewportSize);
       if (phase === "selected") {
         if (selectedRegion) {
           const { x, y, width, height } = selectedRegion;
           const inSelection =
-            e.clientX >= x && e.clientX <= x + width && e.clientY >= y && e.clientY <= y + height;
+            clampedPoint.x >= x && clampedPoint.x <= x + width && clampedPoint.y >= y && clampedPoint.y <= y + height;
           if (!inSelection) {
             setPhase("selecting");
             setSelectedRegion(null);
             clearAnnotations();
-            setDragStart({ x: e.clientX, y: e.clientY });
-            setDragCurrent({ x: e.clientX, y: e.clientY });
+            setDragStart(clampedPoint);
+            setDragCurrent(clampedPoint);
           }
         }
         return;
       }
-      setDragStart({ x: e.clientX, y: e.clientY });
-      setDragCurrent({ x: e.clientX, y: e.clientY });
+      setDragStart(clampedPoint);
+      setDragCurrent(clampedPoint);
     },
-    [phase, selectedRegion, clearAnnotations]
+    [phase, selectedRegion, clearAnnotations, viewportSize]
   );
 
   const handleMouseDownHandle = useCallback(
     (e: React.MouseEvent, handle: string) => {
       e.stopPropagation();
       setResizeHandle(handle);
-      setResizeDragStart({ x: e.clientX, y: e.clientY });
+      setResizeDragStart(clampPointToViewport({ x: e.clientX, y: e.clientY }, viewportSize));
       setInitialRegion(selectedRegion ? { ...selectedRegion } : null);
     },
-    [selectedRegion]
+    [selectedRegion, viewportSize]
   );
 
   const getSelectionRegion = useCallback((): Region | null => {
@@ -439,8 +509,13 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     const y = Math.min(dragStart.y, dragCurrent.y);
     const width = Math.abs(dragCurrent.x - dragStart.x);
     const height = Math.abs(dragCurrent.y - dragStart.y);
-    return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
-  }, [dragStart, dragCurrent]);
+    return clampRegion({
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(width),
+      height: Math.round(height),
+    });
+  }, [dragStart, dragCurrent, clampRegion]);
 
   const handleMouseUp = useCallback(async () => {
     if (phase === "selected" && resizeHandle) {
@@ -455,7 +530,7 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     if (isDragging && dragStart && dragCurrent) {
       const region = getSelectionRegion();
       if (region && region.width > 5 && region.height > 5) {
-        setSelectedRegion(region);
+        setSelectedRegion(clampRegion(region));
         setPhase("selected");
         setIsDragging(false);
         setDragStart(null);
@@ -465,12 +540,12 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     }
 
     if (hoveredWindow) {
-      setSelectedRegion({
+      setSelectedRegion(clampRegion({
         x: Math.round(hoveredWindow.x),
         y: Math.round(hoveredWindow.y),
         width: Math.round(hoveredWindow.width),
         height: Math.round(hoveredWindow.height),
-      });
+      }));
       setPhase("selected");
       setIsDragging(false);
       setDragStart(null);
@@ -481,7 +556,7 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     setIsDragging(false);
     setDragStart(null);
     setDragCurrent(null);
-  }, [phase, resizeHandle, isDragging, dragStart, dragCurrent, hoveredWindow, getSelectionRegion]);
+  }, [phase, resizeHandle, isDragging, dragStart, dragCurrent, hoveredWindow, getSelectionRegion, clampRegion]);
 
   const currentSelection = phase === "selected" ? selectedRegion : getSelectionRegion();
 
@@ -519,15 +594,31 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
 
       {/* Hovered window highlight */}
       {hoveredWindow && !isDragging && phase === "selecting" && (
-        <div
-          className="absolute border-2 border-blue-400 bg-blue-400/10 pointer-events-none"
-          style={{ left: hoveredWindow.x, top: hoveredWindow.y, width: hoveredWindow.width, height: hoveredWindow.height }}
-        >
-          <div className="absolute -top-6 left-0 bg-blue-500 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
-            {hoveredWindow.app_name}
-            {hoveredWindow.title ? ` — ${hoveredWindow.title}` : ""} ({Math.round(hoveredWindow.width)}×{Math.round(hoveredWindow.height)})
-          </div>
-        </div>
+        (() => {
+          const displayRegion = clampRegion({
+            x: hoveredWindow.x,
+            y: hoveredWindow.y,
+            width: hoveredWindow.width,
+            height: hoveredWindow.height,
+          });
+
+          return (
+            <div
+              className="absolute border-2 border-blue-400 bg-blue-400/10 pointer-events-none"
+              style={{
+                left: displayRegion.x,
+                top: displayRegion.y,
+                width: displayRegion.width,
+                height: displayRegion.height,
+              }}
+            >
+              <div className="absolute -top-6 left-0 bg-blue-500 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
+                {hoveredWindow.app_name}
+                {hoveredWindow.title ? ` — ${hoveredWindow.title}` : ""} ({Math.round(displayRegion.width)}×{Math.round(displayRegion.height)})
+              </div>
+            </div>
+          );
+        })()
       )}
 
       {/* Selection rectangle */}
@@ -593,7 +684,6 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
           <SelectionHandles region={selectedRegion} onMouseDownHandle={handleMouseDownHandle} />
           <InlineCaptureToolbar
             region={selectedRegion}
-            screenshotData={screenshotData}
             onConfirm={handleConfirm}
             onCancel={onCancel}
             onSave={handleSave}
