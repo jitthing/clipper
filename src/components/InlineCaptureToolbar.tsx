@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCaptureStore, AnnotationTool } from '../stores/captureStore';
 import { ColorPicker } from './ColorPicker';
+import { computeToolbarPosition } from '../utils/captureGeometry';
 
 const IconRectangle = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="12" height="12" rx="1"/></svg>;
 const IconCircle = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="6"/></svg>;
@@ -17,7 +18,6 @@ interface InlineCaptureToolbarProps {
   onCancel: () => void;
   onSave: () => void;
   onCopy: () => void;
-  screenshotData: string;
 }
 
 export function InlineCaptureToolbar({
@@ -29,15 +29,45 @@ export function InlineCaptureToolbar({
 }: InlineCaptureToolbarProps) {
   const { activeTool, setActiveTool, undo, redo, annotations, undoneAnnotations, color, setColor } = useCaptureStore();
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarSize, setToolbarSize] = useState({ width: 600, height: 44 });
+  const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
 
-  const toolbarHeight = 44;
-  const margin = 8;
-  const isEnoughSpaceBelow = region.y + region.height + margin + toolbarHeight < window.innerHeight;
-  const top = isEnoughSpaceBelow
-    ? region.y + region.height + margin
-    : region.y - margin - toolbarHeight;
+  useEffect(() => {
+    const updateViewport = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
 
-  const left = Math.max(margin, Math.min(region.x, window.innerWidth - 600));
+    const updateToolbarSize = () => {
+      if (!toolbarRef.current) return;
+      const rect = toolbarRef.current.getBoundingClientRect();
+      setToolbarSize({
+        width: Math.max(1, Math.round(rect.width)),
+        height: Math.max(1, Math.round(rect.height)),
+      });
+    };
+
+    updateViewport();
+    updateToolbarSize();
+
+    window.addEventListener('resize', updateViewport);
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && toolbarRef.current) {
+      observer = new ResizeObserver(updateToolbarSize);
+      observer.observe(toolbarRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      observer?.disconnect();
+    };
+  }, []);
+
+  const { left, top } = useMemo(
+    () => computeToolbarPosition(region, viewport, toolbarSize),
+    [region, viewport, toolbarSize]
+  );
 
   const tools: { id: AnnotationTool; icon: React.ReactNode; title: string }[] = [
     { id: 'rectangle', icon: <IconRectangle />, title: 'Rectangle' },
@@ -52,6 +82,7 @@ export function InlineCaptureToolbar({
 
   return (
     <div
+      ref={toolbarRef}
       className="absolute flex items-center gap-0.5 bg-gray-900/90 backdrop-blur text-white px-2 py-1.5 rounded-full shadow-lg z-[100] select-none"
       style={{ top, left }}
       onMouseDown={(e) => e.stopPropagation()}

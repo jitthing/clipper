@@ -108,18 +108,8 @@ pub fn run() {
                 });
             }
 
-            // Register Cmd+Shift+X global hotkey
-            let shortcut = Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyX);
-            let handle = app.handle().clone();
-            app.global_shortcut()
-                .on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                    let handle = handle.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = commands::start_capture_flow(&handle).await {
-                            eprintln!("Capture flow failed: {}", e);
-                        }
-                    });
-                })?;
+            let capture_shortcut = hotkey::bootstrap_capture_shortcut(app.handle())?;
+            app.manage(hotkey::HotkeyState::new(capture_shortcut));
 
             // Register Cmd+Shift+R global hotkey for recording toggle
             let recording_shortcut =
@@ -157,6 +147,9 @@ pub fn run() {
             commands::close_overlay,
             commands::complete_capture,
             commands::trigger_capture,
+            commands::get_capture_shortcut,
+            commands::set_capture_shortcut,
+            commands::reset_capture_shortcut,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Snaplark");

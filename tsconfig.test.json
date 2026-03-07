@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "lib": ["ES2021", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": false,
+    "outDir": ".tmp-tests",
+    "rootDir": ".",
+    "skipLibCheck": true
+  },
+  "include": ["src/utils/captureGeometry.ts"]
+}
