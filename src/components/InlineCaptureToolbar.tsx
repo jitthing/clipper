@@ -14,7 +14,6 @@ const IconNumber = () => <svg width="16" height="16" fill="none" stroke="current
 
 interface InlineCaptureToolbarProps {
   region: { x: number; y: number; width: number; height: number };
-  onConfirm: () => void;
   onCancel: () => void;
   onSave: () => void;
   onCopy: () => void;
@@ -22,7 +21,6 @@ interface InlineCaptureToolbarProps {
 
 export function InlineCaptureToolbar({
   region,
-  onConfirm,
   onCancel,
   onSave,
   onCopy,
@@ -168,7 +166,7 @@ export function InlineCaptureToolbar({
       </button>
       <button
         title="Confirm (Enter)"
-        onClick={onConfirm}
+        onClick={onCopy}
         className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 text-white ml-0.5"
       >
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8l3 3 5-5"/></svg>
