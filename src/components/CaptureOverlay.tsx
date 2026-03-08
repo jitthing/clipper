@@ -27,11 +27,10 @@ type OverlayPhase = "selecting" | "selected";
 
 interface CaptureOverlayProps {
   screenshotData: string;
-  onCapture: (imageData: string) => void;
   onCancel: () => void;
 }
 
-export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureOverlayProps) {
+export function CaptureOverlay({ screenshotData, onCancel }: CaptureOverlayProps) {
   const [phase, setPhase] = useState<OverlayPhase>("selecting");
   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
   const [initialRegion, setInitialRegion] = useState<Region | null>(null);
@@ -179,11 +178,6 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     return offscreen.toDataURL("image/png");
   }, [selectedRegion, annotations, screenshotSize, viewportSize]);
 
-  const handleConfirm = useCallback(() => {
-    const dataUrl = exportWithAnnotations();
-    onCapture(dataUrl);
-  }, [exportWithAnnotations, onCapture]);
-
   const handleCopy = useCallback(async () => {
     try {
       const dataUrl = exportWithAnnotations();
@@ -213,7 +207,7 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
     }
   }, [exportWithAnnotations, onCancel]);
 
-  // ESC to cancel/back, Enter to confirm
+  // ESC to cancel/back, Enter to copy and dismiss
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -226,12 +220,12 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
         }
       }
       if (e.key === "Enter" && phase === "selected" && selectedRegion) {
-        handleConfirm();
+        void handleCopy();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onCancel, phase, selectedRegion, handleConfirm, clearAnnotations]);
+  }, [onCancel, phase, selectedRegion, handleCopy, clearAnnotations]);
 
   // Focus overlay on mount
   useEffect(() => {
@@ -684,7 +678,6 @@ export function CaptureOverlay({ screenshotData, onCapture, onCancel }: CaptureO
           <SelectionHandles region={selectedRegion} onMouseDownHandle={handleMouseDownHandle} />
           <InlineCaptureToolbar
             region={selectedRegion}
-            onConfirm={handleConfirm}
             onCancel={onCancel}
             onSave={handleSave}
             onCopy={handleCopy}

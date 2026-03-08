@@ -7,6 +7,7 @@ import { PinWindow } from "./components/PinWindow";
 import { AnnotationCanvas } from "./components/AnnotationCanvas";
 import { SaveDialog } from "./components/SaveDialog";
 import { PermissionPanel } from "./components/PermissionPanel";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { Toast } from "./components/Toast";
 import { useCaptureStore } from "./stores/captureStore";
 import { exportCanvas } from "./utils/canvas";
@@ -101,6 +102,7 @@ function App() {
   const [isStartingRecording, setIsStartingRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [webcamOverlayEnabled, setWebcamOverlayEnabled] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [captureShortcut, setCaptureShortcut] = useState("CommandOrControl+Shift+X");
   const [pendingCaptureShortcut, setPendingCaptureShortcut] = useState("CommandOrControl+Shift+X");
   const [isListeningForShortcut, setIsListeningForShortcut] = useState(false);
@@ -246,15 +248,6 @@ function App() {
       unlistenOpen.then((f) => f());
     };
   }, [isOverlay, handleCapture, setMode]);
-
-  // Overlay: handle capture result — send to Rust and close
-  const handleOverlayCapture = useCallback(async (imageData: string) => {
-    try {
-      await invoke("complete_capture", { imageData });
-    } catch (err) {
-      console.error("complete_capture failed:", err);
-    }
-  }, []);
 
   // Overlay: handle cancel
   const handleOverlayCancel = useCallback(async () => {
@@ -617,6 +610,53 @@ function App() {
     return () => window.removeEventListener("keydown", handleShortcutCapture, true);
   }, [isListeningForShortcut]);
 
+  const updateCaptureShortcut = useCallback(
+    async (shortcut: string) => {
+      try {
+        const result = await invoke<HotkeyMutationResult>("set_capture_shortcut", {
+          shortcut,
+        });
+
+        if (result.status === "ok") {
+          setCaptureShortcut(result.shortcut);
+          setPendingCaptureShortcut(result.shortcut);
+          setShortcutStatus({ variant: "success", message: result.message });
+          return;
+        }
+
+        setShortcutStatus({ variant: "error", message: result.message });
+      } catch (err) {
+        console.error("Failed to set capture shortcut:", err);
+        setShortcutStatus({
+          variant: "error",
+          message: "Failed to update shortcut.",
+        });
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!isSettingsOpen || isListeningForShortcut) return;
+
+    const nextShortcut = pendingCaptureShortcut.trim();
+    if (!nextShortcut || nextShortcut === captureShortcut) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void updateCaptureShortcut(nextShortcut);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    captureShortcut,
+    isListeningForShortcut,
+    isSettingsOpen,
+    pendingCaptureShortcut,
+    updateCaptureShortcut,
+  ]);
+
   // Keyboard shortcuts for undo/redo/escape/OCR
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -640,6 +680,21 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [mode, undo, redo, handleOcr, setMode, hideMainWindow, isListeningForShortcut]);
 
+  useEffect(() => {
+    if (isOverlay) return;
+
+    const unlistenSettings = listen("open-settings", () => {
+      setIsSettingsOpen(true);
+      setPendingCaptureShortcut(captureShortcut);
+      setIsListeningForShortcut(false);
+      setShortcutStatus(null);
+    });
+
+    return () => {
+      unlistenSettings.then((f) => f());
+    };
+  }, [captureShortcut, isOverlay]);
+
   // Early return for pin windows - must be after all hooks
   if (isPinWindow) {
     return <PinWindow />;
@@ -653,7 +708,6 @@ function App() {
     return (
       <CaptureOverlay
         screenshotData={overlayScreenshot}
-        onCapture={handleOverlayCapture}
         onCancel={handleOverlayCancel}
       />
     );
@@ -748,95 +802,6 @@ function App() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-left">
-                  <p className="text-sm font-semibold text-gray-900">Capture Shortcut</p>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Current:{" "}
-                    <kbd className="rounded bg-white px-2 py-1 font-mono text-xs">
-                      {formatShortcutForDisplay(captureShortcut)}
-                    </kbd>
-                  </p>
-                  <p className="mt-1 text-sm text-gray-600">
-                    New:{" "}
-                    <kbd className="rounded bg-white px-2 py-1 font-mono text-xs">
-                      {formatShortcutForDisplay(pendingCaptureShortcut)}
-                    </kbd>
-                  </p>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setShortcutStatus(null);
-                        setIsListeningForShortcut(true);
-                      }}
-                      className="rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-300"
-                    >
-                      {isListeningForShortcut ? "Press keys..." : "Record Shortcut"}
-                    </button>
-                    <button
-                      onClick={async () => {
-                        setShortcutStatus(null);
-                        try {
-                          const result = await invoke<HotkeyMutationResult>("set_capture_shortcut", {
-                            shortcut: pendingCaptureShortcut,
-                          });
-                          setCaptureShortcut(result.shortcut);
-                          setPendingCaptureShortcut(result.shortcut);
-                          setShortcutStatus({
-                            variant: result.status === "ok" ? "success" : "error",
-                            message: result.message,
-                          });
-                        } catch (err) {
-                          console.error("Failed to set capture shortcut:", err);
-                          setShortcutStatus({
-                            variant: "error",
-                            message: "Failed to update shortcut.",
-                          });
-                        }
-                      }}
-                      className="rounded-lg bg-blue-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={async () => {
-                        setShortcutStatus(null);
-                        try {
-                          const result =
-                            await invoke<HotkeyMutationResult>("reset_capture_shortcut");
-                          setCaptureShortcut(result.shortcut);
-                          setPendingCaptureShortcut(result.shortcut);
-                          setShortcutStatus({
-                            variant: result.status === "ok" ? "success" : "error",
-                            message: result.message,
-                          });
-                        } catch (err) {
-                          console.error("Failed to reset capture shortcut:", err);
-                          setShortcutStatus({
-                            variant: "error",
-                            message: "Failed to reset shortcut.",
-                          });
-                        }
-                      }}
-                      className="rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-300"
-                    >
-                      Reset Default
-                    </button>
-                  </div>
-                  {shortcutStatus && (
-                    <p
-                      className={`mt-2 text-xs ${
-                        shortcutStatus.variant === "success" ? "text-emerald-700" : "text-red-600"
-                      }`}
-                    >
-                      {shortcutStatus.message}
-                    </p>
-                  )}
-                  <p className="mt-2 text-xs text-gray-500">
-                    Requires Command/Ctrl + Shift/Alt + A-Z. Recording shortcut (
-                    {formatShortcutForDisplay("CommandOrControl+Shift+R")}) is reserved.
-                  </p>
-                </div>
               </div>
             )}
           </div>
@@ -905,6 +870,49 @@ function App() {
             </div>
           )}
         </div>
+      )}
+
+      {isSettingsOpen && (
+        <SettingsPanel
+          captureShortcut={captureShortcut}
+          pendingCaptureShortcut={pendingCaptureShortcut}
+          isListeningForShortcut={isListeningForShortcut}
+          shortcutStatus={shortcutStatus}
+          onClose={() => {
+            setIsSettingsOpen(false);
+            setIsListeningForShortcut(false);
+            setPendingCaptureShortcut(captureShortcut);
+            setShortcutStatus(null);
+          }}
+          onPendingCaptureShortcutChange={(value) => {
+            setPendingCaptureShortcut(value);
+            setShortcutStatus(null);
+          }}
+          onStartListening={() => {
+            setShortcutStatus(null);
+            setIsListeningForShortcut(true);
+          }}
+          onReset={() => {
+            setShortcutStatus(null);
+            void invoke<HotkeyMutationResult>("reset_capture_shortcut")
+              .then((result) => {
+                setCaptureShortcut(result.shortcut);
+                setPendingCaptureShortcut(result.shortcut);
+                setShortcutStatus({
+                  variant: result.status === "ok" ? "success" : "error",
+                  message: result.message,
+                });
+              })
+              .catch((err) => {
+                console.error("Failed to reset capture shortcut:", err);
+                setShortcutStatus({
+                  variant: "error",
+                  message: "Failed to reset shortcut.",
+                });
+              });
+          }}
+          formatShortcutForDisplay={formatShortcutForDisplay}
+        />
       )}
     </div>
   );

@@ -28,6 +28,13 @@ pub fn run() {
                     let _ = window.emit("open-main-view", ());
                 }
             }
+            "open-settings" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    let _ = window.emit("open-settings", ());
+                }
+            }
             "toggle-recording" => {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.emit("toggle-recording-request", ());
@@ -74,6 +81,13 @@ pub fn run() {
                 true,
                 None::<&str>,
             )?;
+            let settings_item = MenuItem::with_id(
+                &app_handle,
+                "open-settings",
+                "Preferences",
+                true,
+                None::<&str>,
+            )?;
             let toggle_webcam_item = MenuItem::with_id(
                 &app_handle,
                 "toggle-webcam-overlay",
@@ -86,6 +100,7 @@ pub fn run() {
                 &app_handle,
                 &[
                     &show_item,
+                    &settings_item,
                     &toggle_recording_item,
                     &toggle_webcam_item,
                     &quit_item,
