@@ -1,4 +1,4 @@
-# Snaplark — Project Plan
+# Clipper — Project Plan
 
 ## Vision
 
@@ -65,7 +65,7 @@ An open-source, lightweight screenshot and screen capture tool that replicates L
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   Snaplark App                       │
+│                   Clipper App                       │
 ├──────────────────────┬──────────────────────────────┤
 │   Frontend (WebView) │      Rust Backend (Tauri)     │
 │                      │                               │
@@ -109,7 +109,7 @@ An open-source, lightweight screenshot and screen capture tool that replicates L
 ## File Structure
 
 ```
-snaplark/
+clipper/
 ├── src-tauri/
 │   ├── Cargo.toml
 │   ├── tauri.conf.json

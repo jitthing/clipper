@@ -1,10 +1,10 @@
-# Snaplark Architecture
+# Clipper Architecture
 
 ## System Overview
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                        Snaplark App                           │
+│                        Clipper App                           │
 ├─────────────────────────────┬────────────────────────────────┤
 │    Frontend (WebView/React) │     Backend (Rust/Tauri 2.0)   │
 │                             │                                │

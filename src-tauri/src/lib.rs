@@ -70,7 +70,7 @@ pub fn run() {
             let show_item = MenuItem::with_id(
                 &app_handle,
                 "show-main",
-                "Open Snaplark",
+                "Open Clipper",
                 true,
                 None::<&str>,
             )?;
@@ -167,5 +167,5 @@ pub fn run() {
             commands::reset_capture_shortcut,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Snaplark");
+        .expect("error while running Clipper");
 }

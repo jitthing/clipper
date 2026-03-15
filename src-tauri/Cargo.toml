@@ -1,12 +1,12 @@
 [package]
-name = "snaplark"
+name = "clipper"
 version = "0.1.0"
 description = "A screenshot and screen capture tool"
 authors = ["jitthing"]
 edition = "2021"
 
 [lib]
-name = "snaplark_lib"
+name = "clipper_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
