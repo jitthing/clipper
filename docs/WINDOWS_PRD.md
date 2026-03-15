@@ -1,9 +1,9 @@
-# Snaplark Windows Support PRD
+# Clipper Windows Support PRD
 
 ## 1. Executive Summary
 
 ### Goal
-Add first-class Windows support to Snaplark (Tauri 2.0, Rust + React/TypeScript) while preserving the existing capture UX: `Capture -> Annotate -> Copy/Save/Pin`.
+Add first-class Windows support to Clipper (Tauri 2.0, Rust + React/TypeScript) while preserving the existing capture UX: `Capture -> Annotate -> Copy/Save/Pin`.
 
 ### Current State (as of March 6, 2026)
 - Core capture, permission checks, window listing, clipboard, and OCR are macOS-centric in Rust.

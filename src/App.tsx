@@ -279,7 +279,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `snaplark-recording-${formatSaveTimestamp(new Date())}.webm`;
+    link.download = `clipper-recording-${formatSaveTimestamp(new Date())}.webm`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, []);
@@ -540,7 +540,7 @@ function App() {
 
       const dataUrl = exportCanvas(bgCanvasRef.current, annotations, format, quality);
       const ext = format === "jpg" ? "jpg" : "png";
-      const defaultPath = `~/Downloads/snaplark-${formatSaveTimestamp(new Date())}.${ext}`;
+      const defaultPath = `~/Downloads/clipper-${formatSaveTimestamp(new Date())}.${ext}`;
 
       try {
         const { save } = await import("@tauri-apps/plugin-dialog");
@@ -714,7 +714,7 @@ function App() {
       {mode === "idle" && (
         <div className="flex min-h-screen items-center justify-center">
           <div className="max-w-xl rounded-2xl bg-white/95 p-8 text-center shadow-xl backdrop-blur-sm">
-            <h1 className="mb-2 text-4xl font-bold text-gray-900">Snaplark</h1>
+            <h1 className="mb-2 text-4xl font-bold text-gray-900">Clipper</h1>
             <p className="mb-6 text-gray-600">
               Press <kbd className="rounded bg-gray-100 px-2 py-1 font-mono text-sm">⌘⇧A</kbd> to
               open the capture overlay from background mode.

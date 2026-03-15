@@ -21,7 +21,7 @@ export function PermissionPanel({
     <div className="text-center p-6 rounded-xl bg-white/95 shadow-xl max-w-xl">
       <h2 className="text-2xl font-semibold text-gray-900 mb-2">Permissions Required</h2>
       <p className="text-gray-600 mb-5">
-        Snaplark needs Screen Recording access to capture your screen. Accessibility is recommended
+        Clipper needs Screen Recording access to capture your screen. Accessibility is recommended
         for the best window selection metadata.
       </p>
 

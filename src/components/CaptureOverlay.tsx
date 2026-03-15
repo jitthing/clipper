@@ -195,7 +195,7 @@ export function CaptureOverlay({ screenshotData, onCancel }: CaptureOverlayProps
       const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
       const path = await save({
         filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg"] }],
-        defaultPath: `snaplark-${Date.now()}.png`,
+        defaultPath: `clipper-${Date.now()}.png`,
       });
       if (path) {
         const format = path.toLowerCase().endsWith(".jpg") || path.toLowerCase().endsWith(".jpeg") ? "jpg" : "png";

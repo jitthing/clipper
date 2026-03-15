@@ -1,4 +1,4 @@
-# 📸 Snaplark
+# 📸 Clipper
 
 A lightweight, open-source screenshot and screen capture tool that replicates Lark's capture experience: **Capture → Annotate → Pin → Share.**
 
@@ -7,7 +7,7 @@ Built with [Tauri 2.0](https://v2.tauri.app/) — Rust backend, React + TypeScri
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Status](https://img.shields.io/badge/status-in%20development-orange)
-![CI](https://github.com/jitthing/snaplark/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/jitthing/clipper/actions/workflows/ci.yml/badge.svg)
 
 ## Features
 
@@ -31,13 +31,13 @@ Built with [Tauri 2.0](https://v2.tauri.app/) — Rust backend, React + TypeScri
 | Feature | Status |
 |---|---|
 | Scrolling capture (scrollshot) | 🚧 Iterating |
-| Screen recording + webcam overlay | ✅ Done ([#29](https://github.com/jitthing/snaplark/issues/29), [#36](https://github.com/jitthing/snaplark/pull/36)) |
-| Quick share (upload + copy link + retry UX) | 📋 Planned ([#30](https://github.com/jitthing/snaplark/issues/30)) |
-| Keyboard shortcuts customization | 📋 Planned ([#31](https://github.com/jitthing/snaplark/issues/31)) |
-| Plugin/extensibility system | 📋 Planned ([#32](https://github.com/jitthing/snaplark/issues/32)) |
-| Cross-platform (Windows/Linux abstraction) | 📋 Planned ([#33](https://github.com/jitthing/snaplark/issues/33)) |
+| Screen recording + webcam overlay | ✅ Done ([#29](https://github.com/jitthing/clipper/issues/29), [#36](https://github.com/jitthing/clipper/pull/36)) |
+| Quick share (upload + copy link + retry UX) | 📋 Planned ([#30](https://github.com/jitthing/clipper/issues/30)) |
+| Keyboard shortcuts customization | 📋 Planned ([#31](https://github.com/jitthing/clipper/issues/31)) |
+| Plugin/extensibility system | 📋 Planned ([#32](https://github.com/jitthing/clipper/issues/32)) |
+| Cross-platform (Windows/Linux abstraction) | 📋 Planned ([#33](https://github.com/jitthing/clipper/issues/33)) |
 
-Tracking epic: [#28 — v0.2 roadmap](https://github.com/jitthing/snaplark/issues/28)
+Tracking epic: [#28 — v0.2 roadmap](https://github.com/jitthing/clipper/issues/28)
 
 ## Screenshots
 
@@ -58,13 +58,13 @@ Tracking epic: [#28 — v0.2 roadmap](https://github.com/jitthing/snaplark/issue
 
 ## Install (No Rust Required)
 
-If you only want to use Snaplark, you **do not** need Rust or Node.
+If you only want to use Clipper, you **do not** need Rust or Node.
 
 ### Option A — Download app from GitHub Releases
 
-1. Go to [Releases](https://github.com/jitthing/snaplark/releases)
+1. Go to [Releases](https://github.com/jitthing/clipper/releases)
 2. Download the latest macOS `.dmg`
-3. Open the DMG and drag **Snaplark.app** to Applications
+3. Open the DMG and drag **Clipper.app** to Applications
 
 ### Option B — Homebrew (planned)
 
@@ -84,8 +84,8 @@ Until then, use the DMG from Releases.
 
 ```bash
 # Clone the repository
-git clone https://github.com/jitthing/snaplark.git
-cd snaplark
+git clone https://github.com/jitthing/clipper.git
+cd clipper
 
 # Install frontend dependencies
 npm install
@@ -96,14 +96,14 @@ npm run tauri dev
 
 ### Usage
 
-1. Snaplark runs in background/menubar mode.
+1. Clipper runs in background/menubar mode.
 2. Press `⌘⇧X` from anywhere to open the capture overlay.
 3. Press `⌘⇧X` again (or `ESC`) to dismiss the overlay.
 4. Drag to capture a region, then annotate/copy/save/pin.
 
 ### macOS Permissions (First Run)
 
-Snaplark checks permission state and shows an in-app onboarding panel when access is missing.
+Clipper checks permission state and shows an in-app onboarding panel when access is missing.
 
 Required:
 - Screen Recording (needed for screenshot capture)
@@ -112,7 +112,7 @@ Recommended:
 - Accessibility (improves window metadata and selection UX)
 
 If capture fails or status is missing:
-1. Open Snaplark from the tray icon.
+1. Open Clipper from the tray icon.
 2. Use the in-app permission panel buttons:
    - `Request Screen Recording`
    - `Open Screen Settings`
@@ -127,19 +127,19 @@ If capture fails or status is missing:
 npm run tauri build
 
 # Output locations:
-#   macOS app:  src-tauri/target/release/bundle/macos/Snaplark.app
-#   DMG:        src-tauri/target/release/bundle/dmg/Snaplark_0.1.0_aarch64.dmg
+#   macOS app:  src-tauri/target/release/bundle/macos/Clipper.app
+#   DMG:        src-tauri/target/release/bundle/dmg/Clipper_0.1.0_aarch64.dmg
 ```
 
 ### CI Distribution Pipelines
 
 - `release.yml` publishes GitHub Release app bundles on version tags (`v*`).
-- The same workflow also builds macOS preview artifacts on every PR, so testers can download and run Snaplark without local Rust setup.
+- The same workflow also builds macOS preview artifacts on every PR, so testers can download and run Clipper without local Rust setup.
 
 ### Project Structure
 
 ```
-snaplark/
+clipper/
 ├── src/                        # React frontend
 │   ├── components/
 │   │   ├── CaptureOverlay.tsx  # Region selection overlay

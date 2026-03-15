@@ -43,7 +43,7 @@ Create a new `ocr.rs` module that uses Apple's Vision framework for text recogni
 
 ### 4. Improve Save UX
 - Update `handleSave` in App.tsx:
-  - Default save path: `~/Downloads/snaplark-YYYYMMDD-HHMMSS.png`
+  - Default save path: `~/Downloads/clipper-YYYYMMDD-HHMMSS.png`
   - Still use Tauri save dialog but pre-fill the default path/filename
   - If dialog is cancelled, do nothing (don't show error)
 - The `SaveDialog` component can stay as-is for format selection

@@ -67,13 +67,8 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let app_handle = app.handle().clone();
-            let show_item = MenuItem::with_id(
-                &app_handle,
-                "show-main",
-                "Open Snaplark",
-                true,
-                None::<&str>,
-            )?;
+            let show_item =
+                MenuItem::with_id(&app_handle, "show-main", "Open Clipper", true, None::<&str>)?;
             let toggle_recording_item = MenuItem::with_id(
                 &app_handle,
                 "toggle-recording",
@@ -167,5 +162,5 @@ pub fn run() {
             commands::reset_capture_shortcut,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Snaplark");
+        .expect("error while running Clipper");
 }
