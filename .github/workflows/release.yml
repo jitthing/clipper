@@ -141,28 +141,7 @@ jobs:
           DMG_NAME=$(basename "$DMG_PATH")
           echo "Version: $VERSION | SHA: $SHA | DMG: $DMG_NAME"
 
-          cat > Casks/clipper.rb << EOF
-          cask "clipper" do
-            version "$VERSION"
-            sha256 "$SHA"
-
-            url "https://github.com/jitthing/clipper/releases/download/v#{version}/$DMG_NAME"
-            name "Clipper"
-            desc "Screenshot tool with smart window detection and inline annotations"
-            homepage "https://github.com/jitthing/clipper"
-
-            depends_on macos: ">= :ventura"
-
-            app "Clipper.app"
-
-            zap trash: [
-              "~/Library/Application Support/com.clipper.app",
-              "~/Library/Preferences/com.clipper.app.plist",
-            ]
-          end
-          EOF
-
-          sed -i 's/^          //' Casks/clipper.rb
+          printf 'cask "clipper" do\n  version "%s"\n  sha256 "%s"\n\n  url "https://github.com/jitthing/clipper/releases/download/v#{version}/%s"\n  name "Clipper"\n  desc "Screenshot tool with smart window detection and inline annotations"\n  homepage "https://github.com/jitthing/clipper"\n\n  depends_on macos: ">= :ventura"\n\n  app "Clipper.app"\n\n  zap trash: [\n    "~/Library/Application Support/com.clipper.app",\n    "~/Library/Preferences/com.clipper.app.plist",\n  ]\nend\n' "$VERSION" "$SHA" "$DMG_NAME" > Casks/clipper.rb
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
