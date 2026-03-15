@@ -57,7 +57,7 @@ jobs:
       - name: Upload macOS bundle artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: snaplark-macos-preview-${{ github.sha }}
+          name: clipper-macos-preview-${{ github.sha }}
           path: |
             src-tauri/target/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/macos/*.app
@@ -114,14 +114,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Snaplark ${{ github.ref_name }}"
+          releaseName: "Clipper ${{ github.ref_name }}"
           releaseBody: |
-            See the [changelog](https://github.com/jitthing/snaplark/blob/main/CHANGELOG.md) for details.
+            See the [changelog](https://github.com/jitthing/clipper/blob/main/CHANGELOG.md) for details.
 
             ## Install via Homebrew
             ```bash
-            brew tap jitthing/snaplark
-            brew install --cask snaplark
+            brew tap jitthing/clipper https://github.com/jitthing/clipper --force
+            brew install --cask clipper
             ```
 
             > **Manual install note:** This app is ad-hoc signed. On first launch, right-click the app → Open (instead of double-clicking).
@@ -129,7 +129,7 @@ jobs:
           prerelease: false
           tauriScript: "echo skip"
 
-      - name: Update Homebrew cask branch
+      - name: Update Homebrew cask on main
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           DMG_PATH=$(find src-tauri/target/release/bundle/dmg -name "*.dmg" | head -1)
@@ -141,34 +141,33 @@ jobs:
           DMG_NAME=$(basename "$DMG_PATH")
           echo "Version: $VERSION | SHA: $SHA | DMG: $DMG_NAME"
 
-          git fetch origin cask
-          git worktree add /tmp/cask origin/cask
-          cd /tmp/cask
+          cat > Casks/clipper.rb << EOF
+          cask "clipper" do
+            version "$VERSION"
+            sha256 "$SHA"
 
-          python3 -c "
-          print('''cask \"snaplark\" do
-            version \"${VERSION}\"
-            sha256 \"${SHA}\"
+            url "https://github.com/jitthing/clipper/releases/download/v#{version}/$DMG_NAME"
+            name "Clipper"
+            desc "Screenshot tool with smart window detection and inline annotations"
+            homepage "https://github.com/jitthing/clipper"
 
-            url \"https://github.com/jitthing/snaplark/releases/download/v#{version}/${DMG_NAME}\"
-            name \"Snaplark\"
-            desc \"Screenshot tool with smart window detection and inline annotations\"
-            homepage \"https://github.com/jitthing/snaplark\"
+            depends_on macos: ">= :ventura"
 
-            depends_on macos: \">= :ventura\"
-
-            app \"Snaplark.app\"
+            app "Clipper.app"
 
             zap trash: [
-              \"~/Library/Application Support/com.snaplark.app\",
-              \"~/Library/Preferences/com.snaplark.app.plist\",
+              "~/Library/Application Support/com.clipper.app",
+              "~/Library/Preferences/com.clipper.app.plist",
             ]
-          end''')
-          " > Casks/snaplark.rb
+          end
+          EOF
+
+          sed -i 's/^          //' Casks/clipper.rb
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/snaplark.rb
-          git commit -m "bump snaplark to v$VERSION" || echo "No changes"
-          git push origin HEAD:cask
-          echo "✅ Cask branch updated to v$VERSION"
+          git add Casks/clipper.rb
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "chore: bump cask to v$VERSION"
+          git push origin HEAD:main
+          echo "✅ Cask updated to v$VERSION on main"
