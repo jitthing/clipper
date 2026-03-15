@@ -141,28 +141,26 @@ jobs:
           DMG_NAME=$(basename "$DMG_PATH")
           echo "Version: $VERSION | SHA: $SHA | DMG: $DMG_NAME"
 
-          cat > Casks/clipper.rb << EOF
-          cask "clipper" do
-            version "$VERSION"
-            sha256 "$SHA"
+          cat > Casks/clipper.rb <<EOF
+cask "clipper" do
+  version "$VERSION"
+  sha256 "$SHA"
 
-            url "https://github.com/jitthing/clipper/releases/download/v#{version}/$DMG_NAME"
-            name "Clipper"
-            desc "Screenshot tool with smart window detection and inline annotations"
-            homepage "https://github.com/jitthing/clipper"
+  url "https://github.com/jitthing/clipper/releases/download/v#{version}/$DMG_NAME"
+  name "Clipper"
+  desc "Screenshot tool with smart window detection and inline annotations"
+  homepage "https://github.com/jitthing/clipper"
 
-            depends_on macos: ">= :ventura"
+  depends_on macos: ">= :ventura"
 
-            app "Clipper.app"
+  app "Clipper.app"
 
-            zap trash: [
-              "~/Library/Application Support/com.clipper.app",
-              "~/Library/Preferences/com.clipper.app.plist",
-            ]
-          end
-          EOF
-
-          sed -i 's/^          //' Casks/clipper.rb
+  zap trash: [
+    "~/Library/Application Support/com.clipper.app",
+    "~/Library/Preferences/com.clipper.app.plist",
+  ]
+end
+EOF
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
