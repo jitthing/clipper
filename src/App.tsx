@@ -103,8 +103,8 @@ function App() {
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [webcamOverlayEnabled, setWebcamOverlayEnabled] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [captureShortcut, setCaptureShortcut] = useState("CommandOrControl+Shift+X");
-  const [pendingCaptureShortcut, setPendingCaptureShortcut] = useState("CommandOrControl+Shift+X");
+  const [captureShortcut, setCaptureShortcut] = useState("CommandOrControl+Shift+A");
+  const [pendingCaptureShortcut, setPendingCaptureShortcut] = useState("CommandOrControl+Shift+A");
   const [isListeningForShortcut, setIsListeningForShortcut] = useState(false);
   const [shortcutStatus, setShortcutStatus] = useState<{
     variant: "success" | "error";
@@ -233,21 +233,17 @@ function App() {
     [setCapturedImage, setMode, clearAnnotations]
   );
 
-  // Listen for capture-complete event from Rust (main window only)
+  // Listen for open-main-view tray event (main window only)
   useEffect(() => {
     if (isOverlay) return;
-    const unlistenCapture = listen<string>("capture-complete", (event) => {
-      handleCapture(event.payload);
-    });
     const unlistenOpen = listen("open-main-view", () => {
       setMode("idle");
     });
 
     return () => {
-      unlistenCapture.then((f) => f());
       unlistenOpen.then((f) => f());
     };
-  }, [isOverlay, handleCapture, setMode]);
+  }, [isOverlay, setMode]);
 
   // Overlay: handle cancel
   const handleOverlayCancel = useCallback(async () => {
@@ -720,7 +716,7 @@ function App() {
           <div className="max-w-xl rounded-2xl bg-white/95 p-8 text-center shadow-xl backdrop-blur-sm">
             <h1 className="mb-2 text-4xl font-bold text-gray-900">Snaplark</h1>
             <p className="mb-6 text-gray-600">
-              Press <kbd className="rounded bg-gray-100 px-2 py-1 font-mono text-sm">⌘⇧X</kbd> to
+              Press <kbd className="rounded bg-gray-100 px-2 py-1 font-mono text-sm">⌘⇧A</kbd> to
               open the capture overlay from background mode.
             </p>
             {!hasScreenPermission && permissionStatus ? (

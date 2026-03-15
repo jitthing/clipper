@@ -8,7 +8,7 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut}
 
 use crate::commands;
 
-pub const DEFAULT_CAPTURE_HOTKEY: &str = "CommandOrControl+Shift+X";
+pub const DEFAULT_CAPTURE_HOTKEY: &str = "CommandOrControl+Shift+A";
 const RECORDING_HOTKEY: &str = "CommandOrControl+Shift+R";
 const HOTKEYS_FILE: &str = "hotkeys.json";
 
@@ -367,11 +367,11 @@ mod tests {
 
     #[test]
     fn parses_valid_shortcut() {
-        parse_and_validate_capture_shortcut("CommandOrControl+Shift+X")
+        parse_and_validate_capture_shortcut("CommandOrControl+Shift+A")
             .expect("expected valid shortcut");
         assert_eq!(
-            normalize_shortcut_string("CommandOrControl+Shift+X"),
-            "CommandOrControl+Shift+X"
+            normalize_shortcut_string("CommandOrControl+Shift+A"),
+            "CommandOrControl+Shift+A"
         );
     }
 
