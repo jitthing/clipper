@@ -239,8 +239,8 @@ export function CaptureOverlay({ screenshotData, onCancel }: CaptureOverlayProps
 
   const findWindowAt = useCallback(
     (x: number, y: number): WindowInfo | null => {
-      let best: WindowInfo | null = null;
-      let bestArea = Infinity;
+      // Windows are in z-order (front-to-back) from CGWindowListCopyWindowInfo.
+      // Return the first (topmost) window containing the cursor.
       for (const w of windows) {
         const clamped = clampRegion({
           x: w.x,
@@ -254,14 +254,10 @@ export function CaptureOverlay({ screenshotData, onCancel }: CaptureOverlayProps
           y >= clamped.y &&
           y <= clamped.y + clamped.height
         ) {
-          const area = clamped.width * clamped.height;
-          if (area < bestArea) {
-            bestArea = area;
-            best = w;
-          }
+          return w;
         }
       }
-      return best;
+      return null;
     },
     [windows, clampRegion]
   );
