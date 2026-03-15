@@ -68,7 +68,7 @@ export function SettingsPanel({
             id="capture-shortcut"
             value={pendingCaptureShortcut}
             onChange={(event) => onPendingCaptureShortcutChange(event.target.value)}
-            placeholder="CommandOrControl+Shift+X"
+            placeholder="CommandOrControl+Shift+A"
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
