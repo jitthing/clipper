@@ -38,8 +38,10 @@ jobs:
           APP_PATH=$(find src-tauri/target/release/bundle/macos -name "*.app" -maxdepth 1 | head -1)
           if [ -n "$APP_PATH" ]; then
             echo "Signing $APP_PATH..."
-            codesign --force --deep -s - "$APP_PATH"
+            codesign --force --sign - "$APP_PATH"
             echo "✅ Ad-hoc signed: $APP_PATH"
+            codesign --verify --deep --strict "$APP_PATH"
+            echo "✅ Signature verified"
           fi
 
       - name: Re-create DMG with signed app
@@ -92,8 +94,10 @@ jobs:
           APP_PATH=$(find src-tauri/target/release/bundle/macos -name "*.app" -maxdepth 1 | head -1)
           if [ -n "$APP_PATH" ]; then
             echo "Signing $APP_PATH..."
-            codesign --force --deep -s - "$APP_PATH"
+            codesign --force --sign - "$APP_PATH"
             echo "✅ Ad-hoc signed: $APP_PATH"
+            codesign --verify --deep --strict "$APP_PATH"
+            echo "✅ Signature verified"
           fi
 
       - name: Re-create DMG with signed app
