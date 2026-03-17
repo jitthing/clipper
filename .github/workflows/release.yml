@@ -50,10 +50,12 @@ jobs:
           DMG_DIR="src-tauri/target/release/bundle/dmg"
           if [ -n "$APP_PATH" ]; then
             APP_NAME=$(basename "$APP_PATH" .app)
-            DMG_PATH="$DMG_DIR/${APP_NAME}.dmg"
-            rm -f "$DMG_PATH"
-            hdiutil create -volname "$APP_NAME" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH"
-            echo "✅ DMG recreated with signed app: $DMG_PATH"
+            # Remove ALL existing DMGs and recreate with the signed app
+            ORIG_DMG=$(find "$DMG_DIR" -name "*.dmg" | head -1)
+            echo "Original DMG: $ORIG_DMG"
+            rm -f "$DMG_DIR"/*.dmg
+            hdiutil create -volname "$APP_NAME" -srcfolder "$APP_PATH" -ov -format UDZO "$ORIG_DMG"
+            echo "✅ DMG recreated (overwritten) with signed app: $ORIG_DMG"
           fi
 
       - name: Upload macOS bundle artifacts
@@ -106,10 +108,12 @@ jobs:
           DMG_DIR="src-tauri/target/release/bundle/dmg"
           if [ -n "$APP_PATH" ]; then
             APP_NAME=$(basename "$APP_PATH" .app)
-            DMG_PATH="$DMG_DIR/${APP_NAME}.dmg"
-            rm -f "$DMG_PATH"
-            hdiutil create -volname "$APP_NAME" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH"
-            echo "✅ DMG recreated with signed app: $DMG_PATH"
+            # Overwrite the ORIGINAL DMG so tauri-action uploads the signed version
+            ORIG_DMG=$(find "$DMG_DIR" -name "*.dmg" | head -1)
+            echo "Original DMG: $ORIG_DMG"
+            rm -f "$DMG_DIR"/*.dmg
+            hdiutil create -volname "$APP_NAME" -srcfolder "$APP_PATH" -ov -format UDZO "$ORIG_DMG"
+            echo "✅ DMG recreated (overwritten) with signed app: $ORIG_DMG"
           fi
 
       - name: Publish release assets
