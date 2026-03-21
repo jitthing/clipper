@@ -3,8 +3,38 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/release.yml'
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'tests/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'postcss.config.js'
+      - 'tailwind.config.js'
+      - 'tsconfig.json'
+      - 'tsconfig.node.json'
+      - 'tsconfig.test.json'
+      - 'vite.config.ts'
   pull_request:
     branches: [main]
+    paths:
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/release.yml'
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'tests/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'postcss.config.js'
+      - 'tailwind.config.js'
+      - 'tsconfig.json'
+      - 'tsconfig.node.json'
+      - 'tsconfig.test.json'
+      - 'vite.config.ts'
 
 env:
   CARGO_TERM_COLOR: always

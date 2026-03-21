@@ -66,10 +66,12 @@ If you only want to use Clipper, you **do not** need Rust or Node.
 2. Download the latest macOS `.dmg`
 3. Open the DMG and drag **Clipper.app** to Applications
 
-### Option B — Homebrew (planned)
+### Option B — Homebrew
 
-Homebrew Cask support is planned so users can install with a single command.
-Until then, use the DMG from Releases.
+```bash
+brew tap jitthing/clipper https://github.com/jitthing/clipper --force
+brew install --cask clipper
+```
 
 ## Getting Started
 
