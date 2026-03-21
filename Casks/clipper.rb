@@ -11,6 +11,12 @@ cask "clipper" do
 
   app "Clipper.app"
 
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Clipper.app"],
+                   sudo: false
+  end
+
   zap trash: [
     "~/Library/Application Support/com.clipper.app",
     "~/Library/Preferences/com.clipper.app.plist",
