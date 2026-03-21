@@ -1,6 +1,6 @@
 cask "clipper" do
-  version "0.4.6"
-  sha256 "6d9bb40ba110e9713fa93b75300e418a48d7abf186921a6b815e5e5c38205366"
+  version "0.4.7"
+  sha256 "614789fb85f04bfb2c4ee79cbf6efa174055e0e26e58ff0e2479aaa46d67d99b"
 
   url "https://github.com/jitthing/clipper/releases/download/v#{version}/Clipper_0.1.0_aarch64.dmg"
   name "Clipper"
